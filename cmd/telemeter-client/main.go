@@ -170,6 +170,7 @@ func (o *Options) Run() error {
 	var to, toUpload, toAuthorize *url.URL
 	if len(o.ToUpload) > 0 {
 		to, err = url.Parse(o.ToUpload)
+		toUpload = to
 		if err != nil {
 			return fmt.Errorf("--to-upload is not a valid URL: %v", err)
 		}
@@ -202,10 +203,10 @@ func (o *Options) Run() error {
 		u.Path = path.Join(to.Path, "upload")
 		toUpload = &u
 	}
-
-	if toUpload == nil || toAuthorize == nil {
-		return fmt.Errorf("either --to or --to-auth and --to-upload must be specified")
-	}
+	level.Info(o.Logger).Log("msg3", toUpload)
+	// if toUpload == nil || toAuthorize == nil {
+	// 	return fmt.Errorf("either --to or --to-auth and --to-upload must be specified")
+	// }
 
 	var transformer metricfamily.MultiTransformer
 

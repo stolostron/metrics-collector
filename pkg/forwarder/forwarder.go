@@ -102,6 +102,7 @@ func New(cfg Config) (*Worker, error) {
 		return nil, errors.New("a URL from which to scrape is required")
 	}
 	logger := log.With(cfg.Logger, "component", "forwarder")
+	level.Warn(logger).Log("msg", cfg.ToUpload)
 	w := Worker{
 		from:        cfg.From,
 		interval:    cfg.Interval,
@@ -140,7 +141,7 @@ func New(cfg Config) (*Worker, error) {
 	}
 
 	// Create the `fromClient`.
-	fromTransport := metricsclient.DefaultTransport()
+	fromTransport := metricsclient.DefaultTransport(logger, false)
 	if len(cfg.FromCAFile) > 0 {
 		if fromTransport.TLSClientConfig == nil {
 			fromTransport.TLSClientConfig = &tls.Config{}
@@ -175,7 +176,7 @@ func New(cfg Config) (*Worker, error) {
 	w.fromClient = metricsclient.New(logger, fromClient, cfg.LimitBytes, w.interval, "federate_from")
 
 	// Create the `toClient`.
-	toTransport := metricsclient.DefaultTransport()
+	toTransport := metricsclient.DefaultTransport(logger, true)
 	toTransport.Proxy = http.ProxyFromEnvironment
 	toClient := &http.Client{Transport: toTransport}
 	if cfg.Debug {
@@ -320,9 +321,10 @@ func (w *Worker) forward(ctx context.Context) error {
 	}
 
 	if w.to == nil {
+		level.Warn(w.logger).Log("msg", "to is nil, doing nothing")
 		return nil
 	}
 
 	req = &http.Request{Method: "POST", URL: w.to}
-	return w.toClient.Send(ctx, req, families)
+	return w.toClient.RemoteWrite(ctx, req, families)
 }
