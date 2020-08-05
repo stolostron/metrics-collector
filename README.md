@@ -39,7 +39,7 @@ Get started
 To see this in action, run
 
 ```
-make
+make all
 ./test/integration.sh http://localhost:9005
 ```
 
@@ -55,7 +55,7 @@ specify the bearer token necessary to talk to that server as the second argument
 To build binaries, run
 
 ```
-make
+make all
 ```
 
 To execute the unit test suite, run
