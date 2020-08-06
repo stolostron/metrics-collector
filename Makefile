@@ -20,7 +20,8 @@ else
 endif
 
 GO_PKG=github.com/openshift/telemeter
-REPO?=quay.io/openshift/telemeter
+#REPO?=quay.io/openshift/telemeter
+REPO?=quay.io/open-cluster-management/metrics-collector
 TAG?=$(shell git rev-parse --short HEAD)
 
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test/(?!e2e)')
@@ -82,13 +83,16 @@ build-in-docker:
 
 .PHONY: build
 build:
-	go build ./cmd/telemeter-client
-	go build ./cmd/telemeter-server
-	go build ./cmd/authorization-server
-	go build ./cmd/telemeter-benchmark
+	# go build ./cmd/telemeter-client
+	# go build ./cmd/telemeter-server
+	# go build ./cmd/authorization-server
+	# go build ./cmd/telemeter-benchmark
 
 .PHONY: image
-image: .hack-operator-image
+image:
+	docker build -t $(DOCKER_IMAGE_AND_TAG) .
+
+#image: .hack-operator-image
 
 .hack-operator-image: Dockerfile
 # Create empty target file, for the sole purpose of recording when this target

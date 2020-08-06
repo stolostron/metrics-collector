@@ -14,7 +14,7 @@ else
 endif
 IMAGE_MAINTAINER=smeduri@redhat.com
 IMAGE_VENDOR=Red Hat
-IMAGE_DESCRIPTION=ACM Metrics collector service
+IMAGE_DESCRIPTION=ACM Metrics collector
 IMAGE_SUMMARY =$(IMAGE_DESCRIPTION)
 IMAGE_OPENSHIFT_TAGS=ACM Metrics collector
 
