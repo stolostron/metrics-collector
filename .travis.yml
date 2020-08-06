@@ -16,6 +16,11 @@ addons:
     token:
       secure: "c5DrNGir5MkcUOy9Tp2u4BLIt15t51HDzoGTKISB5Ij6Ok6ktPp0lVvXQPGkiyFAYkRcOWfgPrrUyK83i8SZHTQTPhgW/3ZJ50vroEWvljUSw3BBm7eNIJgqNRJNdgqZrRLPF7G1rV1CpnKwCfXjT04kGnsgzA4mi0RzymgvrRsh3h795X23pSoIODnbnIlxivqfle5yjTAt2ZGBm+8wmW5x70/0NlsysPE1RFtvcvVD8bFWK+6NI6M0x1NXZKg/3c7W9Bm6GkcrdP0OdRYPSQtAofv1xgqcYBNxy2taX5ir8pEWyeerRd3zJpdPy+VmZNut6Pl/pHuqedGun4hynTR/yiKvdmGB5W3sKf6nSunVmld4lTFKmKA9xygl1XGy9aMa8FJYhhCe7HkVpwN8Gq6vbGgcYf8EfOPs2c1ckS8Ff3ZvuiXqxr/TWAOXiUpjv34gexNDC5UZroIJfozBsQcnbjn+oVkRSMB4I8+LwhHIWbbSjZtXwW/MBhOy3sFVbP6uv/nCC1u1exkUl+mu6JwaCRdWzIUfGkEW/56y9RumYlcoC2Xo9yLbD/oRnE0lvapa1B4TvNm6dPfNWo2xzrf0lvW28Vj3UCxSc+3Vo4N+QqCIsX9k0xZTLCFADB8Sw/zSYf/r439aj5u8tjKomOZvNIKB5cNOYKaGbrOTWu4="
 
+branches:
+  only:
+    - master
+    - /^release-[0-9]+\..*$/
+
 env:
   global:
     # Required
@@ -36,8 +41,8 @@ stages:
   - build
   #- unit-test
   #- test-e2e
-  #- release-ff
-  #- publish
+  - release-ff
+  - publish
 
 before_script:
   # Bootstrap the build harness.
@@ -81,11 +86,11 @@ jobs:
       name: "Push commits from master to branch defined in RELEASE_FF_BRANCH"
       if: type = push AND branch =~ /^master$/
       script:
-        - |
-          make 
-          make release-ff
+        - make 
+        - make release-ff
     - stage: publish
       name: "Publish the image to quay with an official version/sha tag and publish entry to integration pipeline stage"
       if: type = push AND branch =~ /^release-[0-9]+\..*$/
       script:
+        - make
         - make pipeline-manifest/update PIPELINE_MANIFEST_COMPONENT_SHA256=${TRAVIS_COMMIT} PIPELINE_MANIFEST_COMPONENT_REPO=${TRAVIS_REPO_SLUG} PIPELINE_MANIFEST_BRANCH=${TRAVIS_BRANCH}
