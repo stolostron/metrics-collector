@@ -5,7 +5,7 @@ endif
 
 
 IMAGE_NAME =$(shell cat COMPONENT_NAME)
-IMAGE_DISPLAY_NAME=ACM Metrics Colector
+IMAGE_DISPLAY_NAME=Open Cluster Management Metrics Colector
 ARCH = $(shell uname -m)
 ifeq ($(ARCH), x86_64)
 	IMAGE_NAME_ARCH=$(IMAGE_NAME)-amd64
@@ -14,9 +14,9 @@ else
 endif
 IMAGE_MAINTAINER=smeduri@redhat.com
 IMAGE_VENDOR=Red Hat
-IMAGE_DESCRIPTION=ACM Metrics collector
+IMAGE_DESCRIPTION=Open Cluster Management Metrics collector
 IMAGE_SUMMARY =$(IMAGE_DESCRIPTION)
-IMAGE_OPENSHIFT_TAGS=ACM Metrics collector
+IMAGE_OPENSHIFT_TAGS=Open Cluster Management Metrics collector
 
 DOCKER_BUILD_OPTS=--build-arg "VCS_REF=$(SEMVERSION)" \
 	--build-arg "VCS_URL=$(VCS_URL)" \
