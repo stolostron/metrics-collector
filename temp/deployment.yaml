@@ -29,25 +29,83 @@ spec:
         - --from=$(FROM)
         - --from-ca-file=/etc/serving-certs-ca-bundle/service-ca.crt
         - --from-token-file=/var/run/secrets/kubernetes.io/serviceaccount/token
-        - --to=url
         - --to-upload=$(TO)
         - --listen=localhost:8080
         - --match={__name__="up"}
-        - --limit-bytes=5242880
+        - --match={__name__=":node_memory_MemAvailable_bytes:sum"}
+        - --match={__name__="cluster:capacity_cpu_cores:sum"}
+        - --match={__name__="cluster:capacity_memory_bytes:sum"}
+        - --match={__name__="cluster:container_cpu_usage:ratio"}
+        - --match={__name__="cluster:container_spec_cpu_shares:ratio"}
+        - --match={__name__="cluster:cpu_usage_cores:sum"} 
+        - --match={__name__="cluster:memory_usage:ratio"}
+        - --match={__name__="cluster:memory_usage_bytes:sum"}
+        - --match={__name__="cluster:usage:resources:sum"}
+        - --match={__name__="cluster_infrastructure_provider"}
+        - --match={__name__="cluster_version"}
+        - --match={__name__="cluster_version_payload"}
+        - --match={__name__="container_cpu_cfs_throttled_periods_total"}
+        - --match={__name__="container_memory_cache"}
+        - --match={__name__="container_memory_rss"}
+        - --match={__name__="container_memory_swap"}
+        - --match={__name__="container_memory_working_set_bytes"}
+        - --match={__name__="container_network_receive_bytes_total"}
+        - --match={__name__="container_network_receive_packets_dropped_total"}
+        - --match={__name__="container_network_receive_packets_total"}
+        - --match={__name__="container_network_transmit_bytes_total"}
+        - --match={__name__="container_network_transmit_packets_dropped_total"}
+        - --match={__name__="container_network_transmit_packets_total"}
+        - --match={__name__="haproxy_backend_connections_total"}
+        - --match={__name__="instance:node_cpu_utilisation:rate1m"}
+        - --match={__name__="instance:node_load1_per_cpu:ratio"}
+        - --match={__name__="instance:node_memory_utilisation:ratio"}
+        - --match={__name__="instance:node_network_receive_bytes_excluding_lo:rate1m"}
+        - --match={__name__="instance:node_network_receive_drop_excluding_lo:rate1m",}
+        - --match={__name__="instance:node_network_transmit_bytes_excluding_lo:rate1m"}
+        - --match={__name__="instance:node_network_transmit_drop_excluding_lo:rate1m"}
+        - --match={__name__="instance:node_num_cpu:sum"}
+        - --match={__name__="instance:node_vmstat_pgmajfault:rate1m"}
+        - --match={__name__="instance_device:node_disk_io_time_seconds:rate1m"}
+        - --match={__name__="instance_device:node_disk_io_time_weighted_seconds:rate1m"}
+        - --match={__name__="kube_node_status_allocatable_cpu_cores"}
+        - --match={__name__="kube_node_status_allocatable_memory_bytes"}
+        - --match={__name__="kube_pod_container_resource_limits_cpu_cores"}
+        - --match={__name__="kube_pod_container_resource_limits_memory_bytes"}
+        - --match={__name__="kube_pod_container_resource_requests_cpu_cores"}
+        - --match={__name__="kube_pod_container_resource_requests_memory_bytes"}
+        - --match={__name__="kube_pod_info"}
+        - --match={__name__="kube_resourcequota"}
+        - --match={__name__="machine_cpu_cores"}
+        - --match={__name__="machine_memory_bytes"}
+        - --match={__name__="mixin_pod_workload"}
+        - --match={__name__="node_cpu_seconds_total"}
+        - --match={__name__="node_filesystem_avail_bytes"}
+        - --match={__name__="node_filesystem_size_bytes"}
+        - --match={__name__="node./oc _memory_MemAvailable_bytes"}
+        - --match={__name__="node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate"}
+        - --match={__name__="node_namespace_pod_container:container_memory_cache"}
+        - --match={__name__="node_namespace_pod_container:container_memory_rss"}
+        - --match={__name__="node_namespace_pod_container:container_memory_swap"}
+        - --match={__name__="node_namespace_pod_container:container_memory_working_set_bytes"}
+        - --match={__name__="node_netstat_Tcp_OutSegs"}
+        - --match={__name__="node_netstat_Tcp_RetransSegs"}
+        - --match={__name__="node_netstat_TcpExt_TCPSynRetrans"}
+        - --limit-bytes=52428800
         - --log-level=debug
         - --verbose=true
+        - --label="cluster=dev"
         env:
         - name: ANONYMIZE_LABELS
         - name: FROM
           value: https://prometheus-k8s.openshift-monitoring.svc:9091
         - name: ID
-          value: 9d9de635-6a7a-4da3-91ae-7b584b7a84e3
+          value: 8bbfc970-d82d-4630-bd36-e503a7a554af
         - name: TO
-          value: http://observatorium-api-open-cluster-management-monitoring.apps.marco.dev05.red-chesterfield.com/api/metrics/v1/write
+          value: http://observatorium-api-open-cluster-management-monitoring.apps.xdharmai-thanos.dev07.red-chesterfield.com/api/metrics/v1/write
         - name: HTTP_PROXY
         - name: HTTPS_PROXY
         - name: NO_PROXY
-        image: blue0/telemeter:latest
+        image: quay.io/open-cluster-management/metrics-collector:2.1.0-PR6-1b7cdb7b33bd9baed230a367465ec7238204648a 
         imagePullPolicy: Always
         name: telemeter-client
         ports:

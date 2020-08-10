@@ -25,6 +25,7 @@ import (
 	telemeterhttp "github.com/openshift/telemeter/pkg/http"
 	"github.com/openshift/telemeter/pkg/logger"
 	"github.com/openshift/telemeter/pkg/metricfamily"
+	"github.com/openshift/telemeter/pkg/utils"
 )
 
 func main() {
@@ -203,7 +204,7 @@ func (o *Options) Run() error {
 		u.Path = path.Join(to.Path, "upload")
 		toUpload = &u
 	}
-	level.Info(o.Logger).Log("msg3", toUpload)
+	level.Info(o.Logger).Log("To Upload", toUpload)
 	// if toUpload == nil || toAuthorize == nil {
 	// 	return fmt.Errorf("either --to or --to-auth and --to-upload must be specified")
 	// }
@@ -262,7 +263,9 @@ func (o *Options) Run() error {
 	var g run.Group
 	{
 		// Execute the worker's `Run` func.
+
 		ctx, cancel := context.WithCancel(context.Background())
+		ctx = utils.WithClusterID(ctx, o.Identifier)
 		g.Add(func() error {
 			worker.Run(ctx)
 			return nil

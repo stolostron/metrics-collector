@@ -1,5 +1,48 @@
 # metrics-collector
-=======
+Metrics-collector implements a client to scrape openshift Promethus
+and performs and push fedration to a Thanos instance hosted by ACM 
+hub cluster. This project is based of Telemeter project (https://github.com/openshift/telemeter).
+
+Setting up development environment to build on laptop : 
+  You will need  ACM Monitoring installed on a hub cluster. Please 
+  see instructions here : https://github.com/open-cluster-management/multicluster-monitoring-operator
+
+  Steps to build : 
+  1) Git clone this repository.
+  2) Login to hub cluster . Example : oc login  -u kubeadmin -p yours --server=https://yours.red-chesterfield.com:6443
+     Presently only supporting on Openshift Cluster . *KS is not supported at this point. 
+  3) Expose access to Prometheus running in Hub Cluster from which the metrics needs to be scraped.
+     Note : In the product this Promethus will be running on a managed cluster.
+     Execute this on a Terminal and let it listen. Example  : `oc port-forward svc/prometheus-operated 7778:9090 --insecure-skip-tls-verify=true -n openshift-monitoring`
+  4) Expose access to Thanos running in Hub Cluster to which the metrics needs to be federated. 
+     Execute this on a Terminal and let it listen. Example : `oc port-forward svc/monitoring-observatorium-observatorium-api 7777:8080 -n open-cluster-management-monitoring`
+  5) Execute : `make all`
+  6) Run the telemeter client Example : `./telemeter-client --id 8bbfc970-d82d-4630-bd36-e503a7a554af --from http://localhost:7778 --to-upload http://localhost:7777/api/metrics/v1/write    --log-level=debug --label="cluster=dev"`
+     --id => represents remote openshift cluster ID (oc get cm cluster-monitoring-config -n openshift-monitoring), for dev this can be any string 
+     -- from => represents the Prometheus endpoint
+     -- to-upload => represents the Thanos endpoint
+     --label  => Helps you filter and query in Grafana , give a unique string
+
+ Verification :
+ Once your client runs you can check the if metrics is flowing to Thanos . Use any REST client tool to make a GET API (Example :Postman) `http://localhost:7777/api/metrics/v1/api/v1/query?query=up{cluster="dev"}` . No Credentials are required.
+
+ You can also check the ACM Grafana dashboard  from Url : `https://multicloud-console.apps.yours.red-chesterfield.com/grafana/dashboards`
+
+ Steps to deploy a Docker image on a remote Cluster : 
+  If you wish to deploy a metric-collector pod on a remote cluster , follow the following steps . Note : This section is work in progress :
+  1)  ocp login to Remote Openshift Cluster
+  2)  create namespace/project `open-cluster-management-monitoring`
+  3)  Update the Server Certificate in ./temp/telemeter-client-serving-certs-ca-bundle.yaml from your remote cluster
+       `oc get cm telemeter-client-serving-certs-ca-bundle -n openshift-monitoring -o yaml`
+  4) `oc apply -f ./temp/telemeter-client-serving-certs-ca-bundle.yaml`
+  5) `oc apply -f ./temp/rolebinding.yaml` Gets you the Auth Token to get to Prometheus
+  6) `oc apply -f ./temp/client_secret.yaml` This is needed for now  , though we are not using in the code(MTLS) , the config points to this .
+  7) Replace the image tag from `./temp/deployment.yaml`
+  8) `oc apply -f ./temp/deployment.yaml`
+
+  You can follow the same verification steps (see above) by logging into Hub cluster's Grafana dashboard. 
+
+=========
 Telemeter
 =========
 

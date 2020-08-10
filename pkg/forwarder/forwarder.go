@@ -176,7 +176,7 @@ func New(cfg Config) (*Worker, error) {
 	w.fromClient = metricsclient.New(logger, fromClient, cfg.LimitBytes, w.interval, "federate_from")
 
 	// Create the `toClient`.
-	toTransport := metricsclient.DefaultTransport(logger, true)
+	toTransport := metricsclient.DefaultTransport(logger, false)
 	toTransport.Proxy = http.ProxyFromEnvironment
 	toClient := &http.Client{Transport: toTransport}
 	if cfg.Debug {

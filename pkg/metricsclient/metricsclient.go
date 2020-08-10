@@ -3,8 +3,6 @@ package metricsclient
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,12 +16,12 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
+	"github.com/openshift/telemeter/pkg/reader"
+	"github.com/openshift/telemeter/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/prometheus/prompb"
-
-	"github.com/openshift/telemeter/pkg/reader"
 )
 
 const (
@@ -251,48 +249,58 @@ func withCancel(ctx context.Context, client *http.Client, req *http.Request, fn 
 }
 
 func DefaultTransport(logger log.Logger, isTLS bool) *http.Transport {
-	// Load client cert
-	cert, err := tls.LoadX509KeyPair("/etc/certs/client.pem", "/etc/certs/client.key")
-	if err != nil {
-		level.Error(logger).Log("msg", "failed to load certs", err)
-		return nil
-	}
-	level.Info(logger).Log("msg", "certs loaded")
-	// Load CA cert
-	caCert, err := ioutil.ReadFile("/etc/certs/ca.pem")
-	if err != nil {
-		level.Error(logger).Log("msg", "failed to load ca", err)
-		return nil
-	}
-	level.Info(logger).Log("msg", "ca loaded")
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-	// Setup HTTPS client
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caCertPool,
-	}
-	tlsConfig.BuildNameToCertificate()
+	/*
+		// Load client cert
+		cert, err := tls.LoadX509KeyPair("/etc/certs/tls.crt", "/etc/certs/tls.key")
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to load certs", err)
+			return nil
+		}
+		level.Info(logger).Log("msg", "certs loaded")
+		// Load CA cert
+		caCert, err := ioutil.ReadFile("/etc/certs/ca.crt")
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to load ca", err)
+			return nil
+		}
+		level.Info(logger).Log("msg", "ca loaded")
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		// Setup HTTPS client
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			RootCAs:      caCertPool,
+		}
+		tlsConfig.BuildNameToCertificate()
 
-	if isTLS {
-		return &http.Transport{
-			Dial: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-			TLSHandshakeTimeout: 10 * time.Second,
-			DisableKeepAlives:   true,
-			TLSClientConfig:     tlsConfig,
+		if isTLS {
+			return &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout: 10 * time.Second,
+				DisableKeepAlives:   true,
+				TLSClientConfig:     tlsConfig,
+			}
+		} else {
+			return &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout: 10 * time.Second,
+				DisableKeepAlives:   true,
+			}
 		}
-	} else {
-		return &http.Transport{
-			Dial: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-			TLSHandshakeTimeout: 10 * time.Second,
-			DisableKeepAlives:   true,
-		}
+	*/
+	return &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 10 * time.Second,
+		DisableKeepAlives:   true,
 	}
 }
 func convertToTimeseries(p *PartitionedMetrics, now time.Time) ([]prompb.TimeSeries, error) {
@@ -339,14 +347,15 @@ func convertToTimeseries(p *PartitionedMetrics, now time.Time) ([]prompb.TimeSer
 	return timeseries, nil
 }
 
-type clusterIDCtxType int
-
-const (
-	clusterIDCtx clusterIDCtxType = iota
-)
-
 func (c *Client) RemoteWrite(ctx context.Context, req *http.Request, families []*clientmodel.MetricFamily) error {
-	clusterID := "1234567890" //ctx.Value(clusterIDCtx).(string)
+	clusterID, ok := utils.ClusterIDFromContext(ctx)
+	if ok {
+		level.Debug(c.logger).Log("ClusterID", clusterID)
+	} else {
+		msg := "cluster ID not set "
+		level.Warn(c.logger).Log("msg", msg)
+	}
+
 	timeseries, err := convertToTimeseries(&PartitionedMetrics{ClusterID: clusterID, Families: families}, time.Now())
 	if err != nil {
 		msg := "failed to convert timeseries"
@@ -358,7 +367,6 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request, families []
 		level.Info(c.logger).Log("msg", "no time series to forward to receive endpoint")
 		return nil
 	}
-
 	wreq := &prompb.WriteRequest{Timeseries: timeseries}
 
 	data, err := proto.Marshal(wreq)
@@ -370,12 +378,15 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request, families []
 
 	compressed := snappy.Encode(nil, data)
 
-	req1, err := http.NewRequest(http.MethodPost, "https://test-open-cluster-management-monitoring.apps.marco.dev05.red-chesterfield.com/api/metrics/v1/test/api/v1/receive", bytes.NewBuffer(compressed))
+	req1, err := http.NewRequest(http.MethodPost, req.URL.String(), bytes.NewBuffer(compressed))
 	if err != nil {
 		msg := "failed to create forwarding request"
 		level.Warn(c.logger).Log("msg", msg, "err", err)
 		return fmt.Errorf(msg)
 	}
+
+	level.Info(c.logger).Log("msg", req1.Host, "err", err)
+
 	//req.Header.Add("THANOS-TENANT", tenantID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -396,5 +407,7 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request, families []
 		level.Warn(c.logger).Log("msg", msg)
 		return fmt.Errorf(msg)
 	}
+	msg := fmt.Sprintf("Thanos response status code is %s", resp.Status)
+	level.Info(c.logger).Log("msg", msg, "err", err)
 	return nil
 }

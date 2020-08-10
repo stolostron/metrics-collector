@@ -4,9 +4,7 @@ ENV GOFLAGS="-mod=vendor"
 
 COPY . /go/src/github.com/open-cluster-management/metrics-collector
 RUN cd /go/src/github.com/open-cluster-management/metrics-collector && \
-    go build ./cmd/telemeter-client && \
-    go build ./cmd/telemeter-server && \
-    go build ./cmd/authorization-server
+    go build ./cmd/telemeter-client
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:8.2
 
@@ -47,5 +45,3 @@ RUN microdnf update &&\
     microdnf clean all
 
 COPY --from=builder /go/src/github.com/open-cluster-management/metrics-collector/telemeter-client /usr/bin/
-COPY --from=builder /go/src/github.com/open-cluster-management/metrics-collector/telemeter-server /usr/bin/
-COPY --from=builder /go/src/github.com/open-cluster-management/metrics-collector/authorization-server /usr/bin/
