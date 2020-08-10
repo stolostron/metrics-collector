@@ -7,7 +7,7 @@ Setting up development environment to build on laptop :
   You will need  ACM Monitoring installed on a hub cluster. Please 
   see instructions here : https://github.com/open-cluster-management/multicluster-monitoring-operator
 
-  Steps to build : 
+ ### Steps to build : 
   1) Git clone this repository.
   2) Login to hub cluster . Example : oc login  -u kubeadmin -p yours --server=https://yours.red-chesterfield.com:6443
      Presently only supporting on Openshift Cluster . *KS is not supported at this point. 
@@ -23,12 +23,12 @@ Setting up development environment to build on laptop :
      -- to-upload => represents the Thanos endpoint
      --label  => Helps you filter and query in Grafana , give a unique string
 
- Verification :
+ ### Verification :
  Once your client runs you can check the if metrics is flowing to Thanos . Use any REST client tool to make a GET API (Example :Postman) `http://localhost:7777/api/metrics/v1/api/v1/query?query=up{cluster="dev"}` . No Credentials are required.
 
  You can also check the ACM Grafana dashboard  from Url : `https://multicloud-console.apps.yours.red-chesterfield.com/grafana/dashboards`
 
- Steps to deploy a Docker image on a remote Cluster : 
+ ### Steps to deploy a Docker image on a remote Cluster : 
   If you wish to deploy a metric-collector pod on a remote cluster , follow the following steps . Note : This section is work in progress :
   1)  ocp login to Remote Openshift Cluster
   2)  create namespace/project `open-cluster-management-monitoring`
