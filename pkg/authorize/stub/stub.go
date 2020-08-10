@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/openshift/telemeter/pkg/fnv"
+	"github.com/open-cluster-management/metrics-collector/pkg/fnv"
 )
 
 func Authorize(token, cluster string) (string, error) {

@@ -31,17 +31,17 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/openshift/telemeter/pkg/authorize"
-	"github.com/openshift/telemeter/pkg/authorize/jwt"
-	"github.com/openshift/telemeter/pkg/authorize/stub"
-	"github.com/openshift/telemeter/pkg/authorize/tollbooth"
-	"github.com/openshift/telemeter/pkg/cache"
-	"github.com/openshift/telemeter/pkg/cache/memcached"
-	telemeter_http "github.com/openshift/telemeter/pkg/http"
-	"github.com/openshift/telemeter/pkg/logger"
-	"github.com/openshift/telemeter/pkg/metricfamily"
-	"github.com/openshift/telemeter/pkg/receive"
-	"github.com/openshift/telemeter/pkg/server"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize/jwt"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize/stub"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize/tollbooth"
+	"github.com/open-cluster-management/metrics-collector/pkg/cache"
+	"github.com/open-cluster-management/metrics-collector/pkg/cache/memcached"
+	telemeter_http "github.com/open-cluster-management/metrics-collector/pkg/http"
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
+	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
+	"github.com/open-cluster-management/metrics-collector/pkg/receive"
+	"github.com/open-cluster-management/metrics-collector/pkg/server"
 )
 
 const desc = `

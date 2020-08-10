@@ -19,12 +19,11 @@ else
 -include vbh/.build-harness-vendorized
 endif
 
-GO_PKG=github.com/openshift/telemeter
+GO_PKG=github.com/open-cluster-management/metrics-collector
 #REPO?=quay.io/openshift/telemeter
-REPO?=quay.io/open-cluster-management/metrics-collector
 TAG?=$(shell git rev-parse --short HEAD)
 
-PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test/(?!e2e)')
+PKGS=$(shell go list ./... | grep -v '/vendor/|/test/(?!e2e)')
 GOLANG_FILES:=$(shell find . -name \*.go -print)
 FIRST_GOPATH:=$(firstword $(subst :, ,$(shell go env GOPATH)))
 BIN_DIR?=$(shell pwd)/_output/bin
@@ -180,7 +179,7 @@ test: test-unit test-integration test-benchmark
 
 .PHONY: test-unit
 test-unit:
-	go test -race -short $(PKGS) -count=1
+	go test -race -short $(PKGS) -count=1 -coverprofile cover.out
 
 # TODO(paulfantom): remove this target after removing it from Prow.
 test-generate:

@@ -1,7 +1,6 @@
 FROM openshift/origin-release:golang-1.13 AS builder
 
 ENV GOFLAGS="-mod=vendor"
-
 COPY . /go/src/github.com/open-cluster-management/metrics-collector
 RUN cd /go/src/github.com/open-cluster-management/metrics-collector && \
     go build ./cmd/telemeter-client

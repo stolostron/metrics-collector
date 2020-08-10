@@ -9,7 +9,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 
-	"github.com/openshift/telemeter/pkg/fnv"
+	"github.com/open-cluster-management/metrics-collector/pkg/fnv"
 )
 
 type Key struct {

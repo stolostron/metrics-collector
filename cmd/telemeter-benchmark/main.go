@@ -17,9 +17,9 @@ import (
 	"github.com/oklog/run"
 	"github.com/spf13/cobra"
 
-	"github.com/openshift/telemeter/pkg/benchmark"
-	telemeterhttp "github.com/openshift/telemeter/pkg/http"
-	"github.com/openshift/telemeter/pkg/logger"
+	"github.com/open-cluster-management/metrics-collector/pkg/benchmark"
+	telemeterhttp "github.com/open-cluster-management/metrics-collector/pkg/http"
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 )
 
 type options struct {

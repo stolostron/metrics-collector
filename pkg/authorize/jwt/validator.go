@@ -6,7 +6,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 
-	"github.com/openshift/telemeter/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
 
 	"gopkg.in/square/go-jose.v2/jwt"
 )

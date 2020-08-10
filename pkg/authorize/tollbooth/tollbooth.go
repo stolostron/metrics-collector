@@ -13,7 +13,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 
-	"github.com/openshift/telemeter/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
 )
 
 type clusterRegistration struct {

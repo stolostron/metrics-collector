@@ -25,9 +25,9 @@ import (
 	"github.com/prometheus/common/expfmt"
 	uuid "github.com/satori/go.uuid"
 
-	"github.com/openshift/telemeter/pkg/authorize"
-	"github.com/openshift/telemeter/pkg/metricfamily"
-	"github.com/openshift/telemeter/pkg/metricsclient"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
+	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
 )
 
 const (

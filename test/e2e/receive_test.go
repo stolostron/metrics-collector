@@ -10,8 +10,8 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
-	"github.com/openshift/telemeter/pkg/authorize"
-	"github.com/openshift/telemeter/pkg/receive"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/receive"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/prompb"
 )

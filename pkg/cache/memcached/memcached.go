@@ -10,7 +10,7 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/pkg/errors"
 
-	tcache "github.com/openshift/telemeter/pkg/cache"
+	tcache "github.com/open-cluster-management/metrics-collector/pkg/cache"
 )
 
 // cache is a Cacher implemented on top of Memcached.

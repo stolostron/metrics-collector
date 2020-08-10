@@ -19,10 +19,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 
-	"github.com/openshift/telemeter/pkg/authorize"
-	telemeterhttp "github.com/openshift/telemeter/pkg/http"
-	"github.com/openshift/telemeter/pkg/metricfamily"
-	"github.com/openshift/telemeter/pkg/metricsclient"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
+	telemeterhttp "github.com/open-cluster-management/metrics-collector/pkg/http"
+	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
+	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
 )
 
 type RuleMatcher interface {

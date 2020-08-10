@@ -13,8 +13,8 @@ import (
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 
-	"github.com/openshift/telemeter/pkg/authorize"
-	"github.com/openshift/telemeter/pkg/metricfamily"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
 )
 
 func TestValidate(t *testing.T) {

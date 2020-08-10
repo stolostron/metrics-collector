@@ -1,4 +1,4 @@
-module github.com/openshift/telemeter
+module github.com/open-cluster-management/metrics-collector
 
 go 1.13
 

@@ -12,7 +12,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"golang.org/x/time/rate"
 
-	"github.com/openshift/telemeter/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
 )
 
 func TestRatelimit(t *testing.T) {
