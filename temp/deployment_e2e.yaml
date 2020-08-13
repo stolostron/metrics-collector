@@ -91,23 +91,23 @@ spec:
         - --match={__name__="node_netstat_Tcp_RetransSegs"}
         - --match={__name__="node_netstat_TcpExt_TCPSynRetrans"}
         - --limit-bytes=52428800
-        - --log-level=debug
+        - --log-level=info
         - --verbose=true
-        - --label="cluster=dev"
+        - --label="cluster=func_e2e_test_travis"
         env:
         - name: ANONYMIZE_LABELS
         - name: FROM
-          value: https://prometheus-k8s.openshift-monitoring.svc:9091
+          value: http://prometheus-k8s.openshift-monitoring.svc:9090
         - name: ID
-          value: 8bbfc970-d82d-4630-bd36-e503a7a554af
+          value: 8bbfc970-d82d-4630-bd36-e503ae2etest
         - name: TO
-          value: http://observatorium-api-open-cluster-management-monitoring.apps.xdharmai-thanos.dev07.red-chesterfield.com/api/metrics/v1/write
+          value: http://observatorium-api-open-cluster-management-monitoring.apps.real-bass.dev05.red-chesterfield.com/api/metrics/v1/write
         - name: HTTP_PROXY
         - name: HTTPS_PROXY
         - name: NO_PROXY
-        image: quay.io/open-cluster-management/metrics-collector:2.1.0-PR6-1b7cdb7b33bd9baed230a367465ec7238204648a 
+        image: {{ METRICS_COLLECTOR_IMAGE }}
         imagePullPolicy: Always
-        name: telemeter-client
+        name: metrics-collector
         ports:
         - containerPort: 8080
           name: http
@@ -124,6 +124,8 @@ spec:
           - mountPath: /etc/serving-certs-ca-bundle
             name: serving-certs-ca-bundle
             readOnly: false
+      imagePullSecrets:
+      - name: multiclusterhub-operator-pull-secret
       volumes:
         - name: certs
           secret:
