@@ -385,8 +385,6 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request, families []
 		return fmt.Errorf(msg)
 	}
 
-	level.Info(c.logger).Log("msg", req1.Host, "err", err)
-
 	//req.Header.Add("THANOS-TENANT", tenantID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
