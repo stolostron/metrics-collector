@@ -20,11 +20,12 @@ deploy() {
     setup_kubectl_and_oc_command
 	create_kind_hub
 	deploy_prometheus_operator
+	deploy_observatorium
+	deploy_thanos
 	deploy_metrics_collector $IMAGE_NAME
 	#install_monitoring_operator
 	delete_kind_hub	
 	#delete_command_binaries	
-	check_status $IMAGE_NAME
 }
 
 setup_kubectl_and_oc_command() {
@@ -86,7 +87,27 @@ create_kind_hub() {
     # kubectl cluster-info --context kind-hub --kubeconfig $(pwd)/.kube/kind-config-hub # confirm connection 
     export KUBECONFIG=$HOME/.kube/kind-config-hub
 } 
+deploy_observatorium() {
+	echo "=====Setting up observatorium in kind cluster=====" 
+	echo "Current directory"
+	echo $(pwd)
 
+	echo -n "Create namespace open-cluster-management-monitoring: " && kubectl create namespace open-cluster-management-monitoring
+	echo "Apply observatorium yamls" 
+	echo -n "Apply client ca cert and server certs: " && kubectl apply -f ./metrics-collector/temp/observatorium-ca-cert.yaml
+	echo -n "Apply secret with tenant yaml : " && kubectl apply -f ./metrics-collector/temp/observatorium-api-secret.yaml
+	echo -n "Apply configmap with rbac yaml : " && kubectl apply -f ./metrics-collector/temp/observatorium-api-configmap.yaml
+	echo -n "Apply Deployment yaml : " && kubectl apply -f ./metrics-collector/temp/observatorium-api.yaml
+	echo -n "Apply Service yaml : " && kubectl apply -f ./metrics-collector/temp/observatorium-api-service.yaml
+}
+deploy_thanos() {
+	echo "=====Setting up thanos in kind cluster=====" 
+	echo -n "Apply create pvc yaml : " && kubectl apply -f ./metrics-collector/temp/thanos-pvc.yaml
+	echo -n "Apply configmap with hashring yaml : " && kubectl apply -f ./metrics-collector/temp/thanos-configmap.yaml
+	echo -n "Apply Deployment yaml : " && kubectl apply -f ./metrics-collector/temp/thanos-api.yaml
+	echo -n "Apply Service yaml : " && kubectl apply -f ./metrics-collector/temp/thanos-service.yaml
+	echo "Waiting 2 minutes for observatorium and thanos to start... " && sleep 120
+}
 
 deploy_prometheus_operator() {
 	echo "=====Setting up prometheus in kind cluster=====" 
@@ -125,7 +146,6 @@ deploy_prometheus_operator() {
 
 deploy_metrics_collector() {
 	echo "=====Deploying metrics-collector====="
-	echo -n "Create namespace open-cluster-management-monitoring: " && kubectl create namespace open-cluster-management-monitoring
 	echo -n "Switch to namespace: " && kubectl config set-context --current --namespace open-cluster-management-monitoring
 
 	echo "Current directory"
@@ -140,6 +160,7 @@ deploy_metrics_collector() {
 	echo -n "Apply telemeter-client-serving-certs-ca-bundle: " && kubectl apply -f ./temp/telemeter-client-serving-certs-ca-bundle.yaml
 	echo -n "Apply rolebinding: " && kubectl apply -f ./temp/rolebinding.yaml
 	echo -n "Apply client secret: " && kubectl apply -f ./temp/client_secret.yaml
+	echo -n "Apply mtls certs: " && kubectl apply -f ./temp/metrics-collector-cert.yaml
 	$sed_command "s~{{ METRICS_COLLECTOR_IMAGE }}~$1~g" ./temp/deployment_e2e.yaml
     $sed_command "s~cluster=func_e2e_test_travis~cluster=func_e2e_test_travis-$1~g" ./temp/deployment_e2e.yaml
 	echo "Display deployment yaml" 
@@ -150,7 +171,26 @@ deploy_metrics_collector() {
 	echo "Waiting 3 minutes for the pod to set up and send data... " && sleep 180
 	POD=$(kubectl get pod -l k8s-app=metrics-collector -n open-cluster-management-monitoring -o jsonpath="{.items[0].metadata.name}")
 	echo "Monitoring pod logs" 
-	kubectl logs $POD | grep Thanos
+	count=0
+	
+	while true ; do   
+	  count=`expr $count + 1`
+	  result=$(kubectl logs $POD | grep -i "Thanos response status code is 200 OK" > /dev/null && echo "SUCCESS" || echo "FAILURE")
+	  if [ $result == "SUCCESS"  ]
+	  then
+	     echo "SUCCESS sending metrics to Thanos"
+		 exit 0
+	  fi
+	  echo "No Sucess yet ..Sleeping for 30s"
+	  echo "available pods: " && kubectl describe pod $POD
+	  sleep 30s
+	  if [ $count -gt 10 ]
+	  then
+	     echo "FAILED sending metrics to Thanos"
+		 exit 1
+	  fi
+
+	done 
 	echo "available pods: " && kubectl get pods --all-namespaces
 
 }
@@ -170,14 +210,5 @@ delete_command_binaries(){
 	rm ./oc 
 }
 
-check_status(){
-	STATUS=$(curl -f "http://observatorium-api-open-cluster-management-monitoring.apps.real-bass.dev05.red-chesterfield.com/api/metrics/v1/api/v1/query?query=up" --silent | grep -i func_e2e_test_travis-$1 > /dev/null && echo "SUCCESS" || echo "FAILURE")
-	echo "Status: " $STATUS
-	if [ $STATUS = "FAILURE" ]
-	then
-	echo "Error: Did not write data to Thanos"
-	exit 1
-	fi
-}
 
 deploy 

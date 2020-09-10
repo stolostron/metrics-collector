@@ -3,11 +3,14 @@ package metricsclient
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +21,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/open-cluster-management/metrics-collector/pkg/reader"
 	"github.com/open-cluster-management/metrics-collector/pkg/utils"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -248,52 +252,47 @@ func withCancel(ctx context.Context, client *http.Client, req *http.Request, fn 
 	return err
 }
 
-func DefaultTransport(logger log.Logger, isTLS bool) *http.Transport {
-	/*
-		// Load client cert
-		cert, err := tls.LoadX509KeyPair("/etc/certs/tls.crt", "/etc/certs/tls.key")
-		if err != nil {
-			level.Error(logger).Log("msg", "failed to load certs", err)
-			return nil
-		}
-		level.Info(logger).Log("msg", "certs loaded")
-		// Load CA cert
-		caCert, err := ioutil.ReadFile("/etc/certs/ca.crt")
-		if err != nil {
-			level.Error(logger).Log("msg", "failed to load ca", err)
-			return nil
-		}
-		level.Info(logger).Log("msg", "ca loaded")
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
-		// Setup HTTPS client
-		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			RootCAs:      caCertPool,
-		}
-		tlsConfig.BuildNameToCertificate()
+func MTLSTransport(logger log.Logger) (*http.Transport, error) {
+	testMode := os.Getenv("UNIT_TEST") != ""
+	caCertFile := "/tlscerts/ca.crt"
+	tlsKeyFile := "/tlscerts/tls.key"
+	tlsCrtFile := "/tlscerts/tls.crt"
+	if testMode {
+		caCertFile = "./tlscerts/ca.crt"
+		tlsKeyFile = "./tlscerts/tls.key"
+		tlsCrtFile = "./tlscerts/tls.crt"
+	}
+	// Load Server CA cert
+	caCert, err := ioutil.ReadFile(caCertFile)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load server ca cert file")
+	}
+	// Load client cert signed by Client CA
+	cert, err := tls.LoadX509KeyPair(tlsCrtFile, tlsKeyFile)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load client ca cert")
+	}
 
-		if isTLS {
-			return &http.Transport{
-				Dial: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).Dial,
-				TLSHandshakeTimeout: 10 * time.Second,
-				DisableKeepAlives:   true,
-				TLSClientConfig:     tlsConfig,
-			}
-		} else {
-			return &http.Transport{
-				Dial: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).Dial,
-				TLSHandshakeTimeout: 10 * time.Second,
-				DisableKeepAlives:   true,
-			}
-		}
-	*/
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+	// Setup HTTPS client
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caCertPool,
+	}
+	return &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 10 * time.Second,
+		DisableKeepAlives:   true,
+		TLSClientConfig:     tlsConfig,
+	}, nil
+
+}
+
+func DefaultTransport(logger log.Logger, isTLS bool) *http.Transport {
 	return &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout:   30 * time.Second,
@@ -303,6 +302,7 @@ func DefaultTransport(logger log.Logger, isTLS bool) *http.Transport {
 		DisableKeepAlives:   true,
 	}
 }
+
 func convertToTimeseries(p *PartitionedMetrics, now time.Time) ([]prompb.TimeSeries, error) {
 	var timeseries []prompb.TimeSeries
 

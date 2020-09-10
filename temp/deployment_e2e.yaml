@@ -92,7 +92,6 @@ spec:
         - --match={__name__="node_netstat_TcpExt_TCPSynRetrans"}
         - --limit-bytes=52428800
         - --log-level=info
-        - --verbose=true
         - --label="cluster=func_e2e_test_travis"
         env:
         - name: ANONYMIZE_LABELS
@@ -101,7 +100,7 @@ spec:
         - name: ID
           value: 8bbfc970-d82d-4630-bd36-e503ae2etest
         - name: TO
-          value: http://observatorium-api-open-cluster-management-monitoring.apps.real-bass.dev05.red-chesterfield.com/api/metrics/v1/write
+          value: https://observability-observatorium-observatorium-api:8443/api/metrics/v1/test-mtls/api/v1/receive
         - name: HTTP_PROXY
         - name: HTTPS_PROXY
         - name: NO_PROXY
@@ -118,18 +117,18 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-          - name: certs
+          - name: observability-managed-cluster-certs
             readOnly: true
-            mountPath: /etc/certs
+            mountPath: /tlscerts
           - mountPath: /etc/serving-certs-ca-bundle
             name: serving-certs-ca-bundle
             readOnly: false
       imagePullSecrets:
       - name: multiclusterhub-operator-pull-secret
       volumes:
-        - name: certs
+        - name: observability-managed-cluster-certs
           secret:
-            secretName: client-certs
+            secretName: observability-managed-cluster-certs
         - configMap:
             name: telemeter-client-serving-certs-ca-bundle
           name: serving-certs-ca-bundle

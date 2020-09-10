@@ -10,6 +10,7 @@ SHELL=/usr/bin/env bash -o pipefail
 # GITHUB_USER containing '@' char must be escaped with '%40'
 export GITHUB_USER := $(shell echo $(GITHUB_USER) | sed 's/@/%40/g')
 export GITHUB_TOKEN ?=
+export UNIT_TEST=true
 
 USE_VENDORIZED_BUILD_HARNESS ?=
 
