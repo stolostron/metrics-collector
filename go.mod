@@ -6,6 +6,7 @@ require (
 	github.com/OneOfOne/xxhash v1.2.6 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
+	github.com/cenkalti/backoff v0.0.0-20181003080854-62661b46c409
 	github.com/coreos/go-oidc v2.0.0+incompatible
 	github.com/go-chi/chi v4.0.4+incompatible
 	github.com/go-kit/kit v0.9.0

@@ -19,6 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 
+	"github.com/cenkalti/backoff"
 	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
 	telemeterhttp "github.com/open-cluster-management/metrics-collector/pkg/http"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
@@ -140,7 +141,6 @@ func New(cfg Config) (*Worker, error) {
 		transformer.With(metricfamily.NewMetricsAnonymizer(anonymizeSalt, cfg.AnonymizeLabels, nil))
 	}
 
-	// Create the `fromClient`.
 	fromTransport := metricsclient.DefaultTransport(logger, false)
 	if len(cfg.FromCAFile) > 0 {
 		if fromTransport.TLSClientConfig == nil {
@@ -159,6 +159,8 @@ func New(cfg Config) (*Worker, error) {
 		}
 		fromTransport.TLSClientConfig.RootCAs = pool
 	}
+
+	// Create the `fromClient`.
 	fromClient := &http.Client{Transport: fromTransport}
 	if cfg.Debug {
 		fromClient.Transport = telemeterhttp.NewDebugRoundTripper(logger, fromClient.Transport)
@@ -330,5 +332,20 @@ func (w *Worker) forward(ctx context.Context) error {
 	}
 
 	req = &http.Request{Method: "POST", URL: w.to}
-	return w.toClient.RemoteWrite(ctx, req, families)
+
+	// retry RemoteWrite with exponential back-off
+	b := backoff.NewExponentialBackOff()
+	// Do not set max elapsed time more than half the scrape interval
+	b.MaxElapsedTime = w.interval / 2
+
+	retryable := func() error {
+		return w.toClient.RemoteWrite(ctx, req, families)
+	}
+
+	notify := func(err error, t time.Duration) {
+		msg := fmt.Sprintf("error: %v happened at time: %v", err, t)
+		_ = level.Warn(w.logger).Log("msg", msg)
+	}
+
+	return backoff.RetryNotify(retryable, b, notify)
 }

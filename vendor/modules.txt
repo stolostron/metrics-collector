@@ -4,6 +4,8 @@ github.com/alecthomas/units
 github.com/beorn7/perks/quantile
 # github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
 github.com/bradfitz/gomemcache/memcache
+# github.com/cenkalti/backoff v0.0.0-20181003080854-62661b46c409
+github.com/cenkalti/backoff
 # github.com/cespare/xxhash v1.1.0
 github.com/cespare/xxhash
 # github.com/cespare/xxhash/v2 v2.1.0
