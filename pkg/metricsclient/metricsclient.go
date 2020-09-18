@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/gogo/protobuf/proto"
@@ -29,7 +30,8 @@ import (
 )
 
 const (
-	nameLabelName = "__name__"
+	nameLabelName   = "__name__"
+	maxSeriesLength = 10000
 )
 
 var (
@@ -347,7 +349,9 @@ func convertToTimeseries(p *PartitionedMetrics, now time.Time) ([]prompb.TimeSer
 	return timeseries, nil
 }
 
-func (c *Client) RemoteWrite(ctx context.Context, req *http.Request, families []*clientmodel.MetricFamily) error {
+// RemoteWrite is used to push the metrics to remote thanos endpoint
+func (c *Client) RemoteWrite(ctx context.Context, req *http.Request,
+	families []*clientmodel.MetricFamily, interval time.Duration) error {
 	clusterID, ok := utils.ClusterIDFromContext(ctx)
 	if ok {
 		level.Debug(c.logger).Log("ClusterID", clusterID)
@@ -364,21 +368,53 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request, families []
 	}
 
 	if len(timeseries) == 0 {
-		level.Info(c.logger).Log("msg", "no time series to forward to receive endpoint")
+		_ = level.Info(c.logger).Log("msg", "no time series to forward to receive endpoint")
 		return nil
 	}
-	wreq := &prompb.WriteRequest{Timeseries: timeseries}
+	_ = level.Debug(c.logger).Log("timeseries length", len(timeseries))
 
-	data, err := proto.Marshal(wreq)
-	if err != nil {
-		msg := "failed to marshal proto"
-		level.Warn(c.logger).Log("msg", msg, "err", err)
-		return fmt.Errorf(msg)
+	for i := 0; i < len(timeseries); i += maxSeriesLength {
+		length := len(timeseries)
+		if i+maxSeriesLength < length {
+			length = i + maxSeriesLength
+		}
+		subTimeseries := timeseries[i:length]
+
+		wreq := &prompb.WriteRequest{Timeseries: subTimeseries}
+		data, err := proto.Marshal(wreq)
+		if err != nil {
+			msg := "failed to marshal proto"
+			level.Warn(c.logger).Log("msg", msg, "err", err)
+			return fmt.Errorf(msg)
+		}
+		compressed := snappy.Encode(nil, data)
+
+		// retry RemoteWrite with exponential back-off
+		b := backoff.NewExponentialBackOff()
+		// Do not set max elapsed time more than half the scrape interval
+		halfInterval := len(timeseries) * 2 / maxSeriesLength
+		if halfInterval < 2 {
+			halfInterval = 2
+		}
+		b.MaxElapsedTime = interval / time.Duration(halfInterval)
+		retryable := func() error {
+			return c.sendRequest(req.URL.String(), compressed)
+		}
+		notify := func(err error, t time.Duration) {
+			msg := fmt.Sprintf("error: %v happened at time: %v", err, t)
+			_ = level.Warn(c.logger).Log("msg", msg)
+		}
+		err = backoff.RetryNotify(retryable, b, notify)
+		if err != nil {
+			return err
+		}
 	}
 
-	compressed := snappy.Encode(nil, data)
+	return nil
+}
 
-	req1, err := http.NewRequest(http.MethodPost, req.URL.String(), bytes.NewBuffer(compressed))
+func (c *Client) sendRequest(serverURL string, body []byte) error {
+	req1, err := http.NewRequest(http.MethodPost, serverURL, bytes.NewBuffer(body))
 	if err != nil {
 		msg := "failed to create forwarding request"
 		level.Warn(c.logger).Log("msg", msg, "err", err)
@@ -401,11 +437,16 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request, families []
 
 	if resp.StatusCode/100 != 2 {
 		// surfacing upstreams error to our users too
-		msg := fmt.Sprintf("response status code is %s", resp.Status)
-		level.Warn(c.logger).Log("msg", msg)
+		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			_ = level.Warn(c.logger).Log(err)
+		}
+		bodyString := string(bodyBytes)
+		msg := fmt.Sprintf("response status code is %s, response body is %s", resp.Status, bodyString)
+		_ = level.Warn(c.logger).Log(msg)
 		return fmt.Errorf(msg)
 	}
 	msg := fmt.Sprintf("Thanos response status code is %s", resp.Status)
-	level.Info(c.logger).Log("msg", msg, "err", err)
+	_ = level.Debug(c.logger).Log("msg", msg)
 	return nil
 }
