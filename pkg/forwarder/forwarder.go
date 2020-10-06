@@ -143,7 +143,9 @@ func New(cfg Config) (*Worker, error) {
 	fromTransport := metricsclient.DefaultTransport(logger, false)
 	if len(cfg.FromCAFile) > 0 {
 		if fromTransport.TLSClientConfig == nil {
-			fromTransport.TLSClientConfig = &tls.Config{}
+			fromTransport.TLSClientConfig = &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			}
 		}
 		pool, err := x509.SystemCertPool()
 		if err != nil {

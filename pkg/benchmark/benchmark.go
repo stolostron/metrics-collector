@@ -163,7 +163,9 @@ func New(cfg *Config) (*Benchmark, error) {
 		transport.Proxy = http.ProxyFromEnvironment
 		if pool != nil {
 			if transport.TLSClientConfig == nil {
-				transport.TLSClientConfig = &tls.Config{}
+				transport.TLSClientConfig = &tls.Config{
+					MinVersion: tls.VersionTLS12,
+				}
 			}
 			transport.TLSClientConfig.RootCAs = pool
 		}
@@ -217,6 +219,9 @@ func (b *Benchmark) Run() {
 			go func(i int, w *worker) {
 				level.Info(b.logger).Log("msg", "started worker", "index", i+1, "total", len(b.workers), "worker", w.id)
 				select {
+				// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
+				//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
+				// #nosec G404
 				case <-time.After(time.Duration(rand.Int63n(int64(w.interval)))):
 					w.run(ctx)
 				case <-ctx.Done():
@@ -291,6 +296,9 @@ func (w *worker) run(ctx context.Context) {
 }
 
 func (w *worker) generate() []*clientmodel.MetricFamily {
+	// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
+	//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
+	// #nosec G404
 	rand.Seed(time.Now().UnixNano())
 	mfs := make([]*clientmodel.MetricFamily, len(w.metrics))
 	now := time.Now().UnixNano() / int64(time.Millisecond)
@@ -299,6 +307,9 @@ func (w *worker) generate() []*clientmodel.MetricFamily {
 		mf.Metric = make([]*clientmodel.Metric, len(w.metrics[i].Metric))
 		for j := range w.metrics[i].Metric {
 			m := randomize(w.metrics[i].Metric[j])
+			// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
+			//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
+			// #nosec G404
 			ts := now - rand.Int63n(int64(w.interval/time.Millisecond))
 			m.TimestampMs = &ts
 			mf.Metric[j] = m
@@ -317,17 +328,26 @@ func randomize(metric *clientmodel.Metric) *clientmodel.Metric {
 	m := *metric
 	if m.GetUntyped() != nil {
 		v := *m.GetUntyped()
+		// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
+		//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
+		// #nosec G404
 		f := math.Round(rand.Float64() * v.GetValue())
 		v.Value = &f
 		m.Untyped = &v
 	}
 	if m.GetGauge() != nil {
 		v := *m.GetGauge()
+		// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
+		//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
+		// #nosec G404
 		f := math.Round(rand.Float64() * v.GetValue())
 		v.Value = &f
 		m.Gauge = &v
 	}
 	if m.GetCounter() != nil {
+		// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
+		//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
+		// #nosec G404
 		if rand.Intn(2) == 1 {
 			v := *m.GetCounter()
 			f := v.GetValue() + 1

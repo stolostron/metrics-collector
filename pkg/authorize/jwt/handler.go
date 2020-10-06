@@ -86,6 +86,9 @@ func (a *authorizeClusterHandler) ServeHTTP(w http.ResponseWriter, req *http.Req
 		}
 
 		// always hide errors from the upstream service from the client
+		// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand) 
+		// (Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
+		// #nosec G404	
 		uid := rand.Int63()
 		level.Error(a.logger).Log("msg", "unable to authorize request", "uid", uid, "err", err)
 		http.Error(w, fmt.Sprintf("Internal server error, requestid=%d", uid), http.StatusInternalServerError)
