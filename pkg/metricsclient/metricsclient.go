@@ -20,6 +20,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/reader"
 	"github.com/open-cluster-management/metrics-collector/pkg/utils"
 	"github.com/pkg/errors"
@@ -111,10 +112,10 @@ func (c *Client) Retrieve(ctx context.Context, req *http.Request) ([]*clientmode
 			family := &clientmodel.MetricFamily{}
 			families = append(families, family)
 			if err := decoder.Decode(family); err != nil {
-				if err == io.EOF {
-					break
+				if err != io.EOF {
+					logger.Log(c.logger, logger.Error, "msg", "error reading body", "err", err)
 				}
-				return err
+				break
 			}
 		}
 
