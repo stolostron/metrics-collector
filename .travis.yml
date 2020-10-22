@@ -61,7 +61,6 @@ jobs:
         - make security/scans
     - stage: unit-test
       name: "Run unit tests"
-      if: type = pull_request
       script:
         # Set the image tag differently for PRs
         # Bootstrap the build harness, pull test image, and run unit tests.   
@@ -71,7 +70,6 @@ jobs:
         # sonar-scanner --debug
     - stage: test-e2e
       name: "Deploy the image to a cluster and run e2e tests"
-      if: type = pull_request
       script:
         #Check out a clusterpool, set up oc, deploy, run e2e tests, and return clusterpool cluster 
         - make component/pull
