@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 
 	"github.com/open-cluster-management/metrics-collector/pkg/fnv"
+	mlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
 )
 
 type Key struct {
@@ -67,7 +67,7 @@ func (s *mock) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	accountID, err := fnv.Hash(regRequest.ClusterID)
 	if err != nil {
-		level.Warn(s.logger).Log("msg", "hashing cluster ID failed", "err", err)
+		mlogger.Log(s.logger, mlogger.Warn, "msg", "hashing cluster ID failed", "err", err)
 		write(w, http.StatusInternalServerError, &registrationError{Name: "", Reason: "hashing cluster ID failed"}, s.logger)
 		return
 	}
@@ -90,11 +90,11 @@ func write(w http.ResponseWriter, statusCode int, resp interface{}, logger log.L
 	w.WriteHeader(statusCode)
 	data, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {
-		level.Error(logger).Log("err", "marshaling response failed", "err", err)
+		mlogger.Log(logger, mlogger.Error, "err", "marshaling response failed", "err", err)
 		return
 	}
 	if _, err := w.Write(data); err != nil {
-		level.Error(logger).Log("err", "writing response failed", "err", err)
+		mlogger.Log(logger, mlogger.Error, "err", "writing response failed", "err", err)
 		return
 	}
 }

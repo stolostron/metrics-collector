@@ -19,13 +19,13 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
 )
@@ -92,11 +92,11 @@ type worker struct {
 // New creates a new Benchmark based on the provided Config. If the Config contains invalid
 // values, then an error is returned.
 func New(cfg *Config) (*Benchmark, error) {
-	logger := log.With(cfg.Logger, "component", "benchmark")
+	clogger := log.With(cfg.Logger, "component", "benchmark")
 	b := Benchmark{
 		reconfigure: make(chan struct{}),
 		workers:     make([]*worker, cfg.Workers),
-		logger:      logger,
+		logger:      clogger,
 	}
 
 	interval := cfg.Interval
@@ -131,7 +131,7 @@ func New(cfg *Config) (*Benchmark, error) {
 			return nil, fmt.Errorf("failed to read to-ca-file: %v", err)
 		}
 		if !pool.AppendCertsFromPEM(data) {
-			level.Warn(logger).Log("msg", "no certs found in to-ca-file")
+			logger.Log(clogger, logger.Warn, "msg", "no certs found in to-ca-file")
 		}
 	}
 
@@ -140,7 +140,7 @@ func New(cfg *Config) (*Benchmark, error) {
 			id:       uuid.Must(uuid.NewV4()).String(),
 			interval: interval,
 			to:       cfg.ToUpload,
-			logger:   logger,
+			logger:   clogger,
 		}
 
 		if _, err := f.Seek(0, 0); err != nil {
@@ -159,7 +159,7 @@ func New(cfg *Config) (*Benchmark, error) {
 			w.metrics = append(w.metrics, &m)
 		}
 
-		transport := metricsclient.DefaultTransport(logger, false)
+		transport := metricsclient.DefaultTransport(clogger, false)
 		transport.Proxy = http.ProxyFromEnvironment
 		if pool != nil {
 			if transport.TLSClientConfig == nil {
@@ -186,7 +186,7 @@ func New(cfg *Config) (*Benchmark, error) {
 			client.Transport = rt
 			transformer.With(metricfamily.NewLabel(nil, rt))
 		}
-		w.client = metricsclient.New(logger, client, LimitBytes, w.interval, "federate_to")
+		w.client = metricsclient.New(clogger, client, LimitBytes, w.interval, "federate_to")
 		w.transformer = transformer
 		b.workers[i] = w
 	}
@@ -217,7 +217,7 @@ func (b *Benchmark) Run() {
 		for i, w := range b.workers {
 			wg.Add(1)
 			go func(i int, w *worker) {
-				level.Info(b.logger).Log("msg", "started worker", "index", i+1, "total", len(b.workers), "worker", w.id)
+				logger.Log(b.logger, logger.Info, "msg", "started worker", "index", i+1, "total", len(b.workers), "worker", w.id)
 				select {
 				// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
 				//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
@@ -238,7 +238,7 @@ func (b *Benchmark) Run() {
 		case <-done:
 			return
 		case <-b.reconfigure:
-			level.Info(b.logger).Log("msg", "restarting workers...")
+			logger.Log(b.logger, logger.Info, "msg", "restarting workers...")
 			continue
 		}
 	}
@@ -278,7 +278,7 @@ func (w *worker) run(ctx context.Context) {
 		wait := w.interval
 		if err := w.forward(ctx, m); err != nil {
 			forwardErrors.Inc()
-			level.Error(w.logger).Log("msg", "unable to forward results", "worker", w.id, "err", err)
+			logger.Log(w.logger, logger.Error, "msg", "unable to forward results", "worker", w.id, "err", err)
 			wait = time.Minute
 		}
 		var n int
@@ -360,14 +360,14 @@ func randomize(metric *clientmodel.Metric) *clientmodel.Metric {
 
 func (w *worker) forward(ctx context.Context, metrics []*clientmodel.MetricFamily) error {
 	if w.to == nil {
-		level.Warn(w.logger).Log("msg", "no destination configured; doing nothing", "worker", w.id)
+		logger.Log(w.logger, logger.Warn, "msg", "no destination configured; doing nothing", "worker", w.id)
 		return nil
 	}
 	if err := metricfamily.Filter(metrics, w.transformer); err != nil {
 		return err
 	}
 	if len(metrics) == 0 {
-		level.Warn(w.logger).Log("msg", "no metrics to send; doing nothing", "worker", w.id)
+		logger.Log(w.logger, logger.Warn, "msg", "no metrics to send; doing nothing", "worker", w.id)
 		return nil
 	}
 

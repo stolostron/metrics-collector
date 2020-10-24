@@ -4,9 +4,9 @@ import (
 	"errors"
 
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 
 	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 
 	"gopkg.in/square/go-jose.v2/jwt"
 )
@@ -43,7 +43,8 @@ var _ = Validator(&validator{})
 func (v *validator) Validate(_ string, public *jwt.Claims, privateObj interface{}) (*authorize.Client, error) {
 	private, ok := privateObj.(*privateClaims)
 	if !ok {
-		level.Info(v.logger).Log("msg", "jwt validator expected private claim of type *privateClaims", "got", privateObj)
+		logger.Log(v.logger, logger.Info, "msg",
+			"jwt validator expected private claim of type *privateClaims", "got", privateObj)
 		return nil, errors.New("token could not be validated")
 	}
 	err := public.Validate(jwt.Expected{
@@ -54,7 +55,7 @@ func (v *validator) Validate(_ string, public *jwt.Claims, privateObj interface{
 	case err == jwt.ErrExpired:
 		return nil, errors.New("token has expired")
 	default:
-		level.Info(v.logger).Log("msg", "unexpected validation", "err", err)
+		logger.Log(v.logger, logger.Info, "msg", "unexpected validation", "err", err)
 		return nil, errors.New("token could not be validated")
 	}
 

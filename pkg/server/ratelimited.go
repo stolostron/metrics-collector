@@ -8,8 +8,9 @@ import (
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"golang.org/x/time/rate"
+
+	mlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
 )
 
 // ErrWriteLimitReached is an error that is returned when a cluster has sent too many requests.
@@ -32,13 +33,13 @@ func Ratelimit(logger log.Logger, limit time.Duration, now func() time.Time, nex
 		clusterID, ok := ClusterIDFromContext(r.Context())
 		if !ok {
 			msg := "failed to get cluster ID from request"
-			level.Warn(rlogger).Log("msg", msg)
+			mlogger.Log(rlogger, mlogger.Warn, "msg", msg)
 			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
 
 		if err := s.limit(limit, now(), clusterID); err != nil {
-			level.Debug(rlogger).Log("msg", "rate limited", "err", err)
+			mlogger.Log(rlogger, mlogger.Debug, "msg", "rate limited", "err", err)
 			http.Error(w, err.Error(), http.StatusTooManyRequests)
 			return
 		}

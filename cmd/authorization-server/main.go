@@ -8,9 +8,9 @@ import (
 	"os"
 
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 
 	"github.com/open-cluster-management/metrics-collector/pkg/authorize/tollbooth"
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 )
 
 type tokenEntry struct {
@@ -40,7 +40,7 @@ func main() {
 	l := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	l = log.WithPrefix(l, "ts", log.DefaultTimestampUTC)
 	l = log.WithPrefix(l, "caller", log.DefaultCaller)
-	level.Info(l).Log("msg", "telemeter authorization-server initialized")
+	logger.Log(l, logger.Info, "msg", "telemeter authorization-server initialized")
 
 	s := tollbooth.NewMock(l, tokenSet)
 

@@ -21,6 +21,7 @@ import (
 
 	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
 	telemeterhttp "github.com/open-cluster-management/metrics-collector/pkg/http"
+	rlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
 )
@@ -102,7 +103,7 @@ func New(cfg Config) (*Worker, error) {
 		return nil, errors.New("a URL from which to scrape is required")
 	}
 	logger := log.With(cfg.Logger, "component", "forwarder")
-	level.Warn(logger).Log("msg", cfg.ToUpload)
+	rlogger.Log(logger, rlogger.Warn, "msg", cfg.ToUpload)
 	w := Worker{
 		from:        cfg.From,
 		interval:    cfg.Interval,
@@ -128,7 +129,7 @@ func New(cfg Config) (*Worker, error) {
 		return nil, fmt.Errorf("anonymize-salt must be specified if anonymize-labels is set")
 	}
 	if len(cfg.AnonymizeLabels) == 0 {
-		level.Warn(logger).Log("msg", "not anonymizing any labels")
+		rlogger.Log(logger, rlogger.Warn, "msg", "not anonymizing any labels")
 	}
 
 	// Configure a transformer.
@@ -156,7 +157,7 @@ func New(cfg Config) (*Worker, error) {
 			return nil, fmt.Errorf("failed to read from-ca-file: %v", err)
 		}
 		if !pool.AppendCertsFromPEM(data) {
-			level.Warn(logger).Log("msg", "no certs found in from-ca-file")
+			rlogger.Log(logger, rlogger.Warn, "msg", "no certs found in from-ca-file")
 		}
 		fromTransport.TLSClientConfig.RootCAs = pool
 	}
@@ -273,7 +274,7 @@ func (w *Worker) Run(ctx context.Context) {
 
 		if err := w.forward(ctx); err != nil {
 			gaugeFederateErrors.Inc()
-			level.Error(w.logger).Log("msg", "unable to forward results", "err", err)
+			rlogger.Log(w.logger, rlogger.Error, "msg", "unable to forward results", "err", err)
 			wait = time.Minute
 		}
 

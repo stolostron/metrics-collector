@@ -17,17 +17,17 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/metrics-collector/pkg/reader"
-	"github.com/open-cluster-management/metrics-collector/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/prometheus/prompb"
+
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
+	"github.com/open-cluster-management/metrics-collector/pkg/reader"
+	"github.com/open-cluster-management/metrics-collector/pkg/utils"
 )
 
 const (
@@ -143,15 +143,15 @@ func (c *Client) Send(ctx context.Context, req *http.Request, families []*client
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	req = req.WithContext(ctx)
 	defer cancel()
-	level.Debug(c.logger).Log("msg", "start to send")
+	logger.Log(c.logger, logger.Debug, "msg", "start to send")
 	return withCancel(ctx, c.client, req, func(resp *http.Response) error {
 		defer func() {
 			if _, err := io.Copy(ioutil.Discard, resp.Body); err != nil {
-				level.Error(c.logger).Log("msg", "error copying body", "err", err)
+				logger.Log(c.logger, logger.Error, "msg", "error copying body", "err", err)
 			}
 			resp.Body.Close()
 		}()
-		level.Debug(c.logger).Log("msg", resp.StatusCode)
+		logger.Log(c.logger, logger.Debug, "msg", resp.StatusCode)
 		switch resp.StatusCode {
 		case http.StatusOK:
 			gaugeRequestSend.WithLabelValues(c.metricsName, "200").Inc()
@@ -163,7 +163,7 @@ func (c *Client) Send(ctx context.Context, req *http.Request, families []*client
 			return fmt.Errorf("gateway server forbidden: %s", resp.Request.URL)
 		case http.StatusBadRequest:
 			gaugeRequestSend.WithLabelValues(c.metricsName, "400").Inc()
-			level.Debug(c.logger).Log("msg", resp.Body)
+			logger.Log(c.logger, logger.Debug, "msg", resp.Body)
 			return fmt.Errorf("gateway server bad request: %s", resp.Request.URL)
 		default:
 			gaugeRequestSend.WithLabelValues(c.metricsName, strconv.Itoa(resp.StatusCode)).Inc()
@@ -355,24 +355,24 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request,
 	families []*clientmodel.MetricFamily, interval time.Duration) error {
 	clusterID, ok := utils.ClusterIDFromContext(ctx)
 	if ok {
-		level.Debug(c.logger).Log("ClusterID", clusterID)
+		logger.Log(c.logger, logger.Debug, "ClusterID", clusterID)
 	} else {
 		msg := "cluster ID not set "
-		level.Warn(c.logger).Log("msg", msg)
+		logger.Log(c.logger, logger.Warn, "msg", msg)
 	}
 
 	timeseries, err := convertToTimeseries(&PartitionedMetrics{ClusterID: clusterID, Families: families}, time.Now())
 	if err != nil {
 		msg := "failed to convert timeseries"
-		level.Warn(c.logger).Log("msg", msg, "err", err)
+		logger.Log(c.logger, logger.Warn, "msg", msg, "err", err)
 		return fmt.Errorf(msg)
 	}
 
 	if len(timeseries) == 0 {
-		_ = level.Info(c.logger).Log("msg", "no time series to forward to receive endpoint")
+		logger.Log(c.logger, logger.Info, "msg", "no time series to forward to receive endpoint")
 		return nil
 	}
-	_ = level.Debug(c.logger).Log("timeseries length", len(timeseries))
+	logger.Log(c.logger, logger.Debug, "timeseries length", len(timeseries))
 
 	for i := 0; i < len(timeseries); i += maxSeriesLength {
 		length := len(timeseries)
@@ -385,7 +385,7 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request,
 		data, err := proto.Marshal(wreq)
 		if err != nil {
 			msg := "failed to marshal proto"
-			level.Warn(c.logger).Log("msg", msg, "err", err)
+			logger.Log(c.logger, logger.Warn, "msg", msg, "err", err)
 			return fmt.Errorf(msg)
 		}
 		compressed := snappy.Encode(nil, data)
@@ -403,7 +403,7 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request,
 		}
 		notify := func(err error, t time.Duration) {
 			msg := fmt.Sprintf("error: %v happened at time: %v", err, t)
-			_ = level.Warn(c.logger).Log("msg", msg)
+			logger.Log(c.logger, logger.Warn, "msg", msg)
 		}
 		err = backoff.RetryNotify(retryable, b, notify)
 		if err != nil {
@@ -418,7 +418,7 @@ func (c *Client) sendRequest(serverURL string, body []byte) error {
 	req1, err := http.NewRequest(http.MethodPost, serverURL, bytes.NewBuffer(body))
 	if err != nil {
 		msg := "failed to create forwarding request"
-		level.Warn(c.logger).Log("msg", msg, "err", err)
+		logger.Log(c.logger, logger.Warn, "msg", msg, "err", err)
 		return fmt.Errorf(msg)
 	}
 
@@ -432,7 +432,7 @@ func (c *Client) sendRequest(serverURL string, body []byte) error {
 	resp, err := c.client.Do(req1)
 	if err != nil {
 		msg := "failed to forward request"
-		level.Warn(c.logger).Log("msg", msg, "err", err)
+		logger.Log(c.logger, logger.Warn, "msg", msg, "err", err)
 		return fmt.Errorf(msg)
 	}
 
@@ -440,14 +440,14 @@ func (c *Client) sendRequest(serverURL string, body []byte) error {
 		// surfacing upstreams error to our users too
 		bodyBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			_ = level.Warn(c.logger).Log(err)
+			logger.Log(c.logger, logger.Warn, err)
 		}
 		bodyString := string(bodyBytes)
 		msg := fmt.Sprintf("response status code is %s, response body is %s", resp.Status, bodyString)
-		_ = level.Warn(c.logger).Log(msg)
+		logger.Log(c.logger, logger.Warn, msg)
 		return fmt.Errorf(msg)
 	}
 	msg := fmt.Sprintf("Thanos response status code is %s", resp.Status)
-	_ = level.Debug(c.logger).Log("msg", msg)
+	logger.Log(c.logger, logger.Debug, "msg", msg)
 	return nil
 }

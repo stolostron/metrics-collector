@@ -139,10 +139,10 @@ func main() {
 	l = log.WithPrefix(l, "caller", log.DefaultCaller)
 	stdlog.SetOutput(log.NewStdlibAdapter(l))
 	opt.Logger = l
-	level.Info(l).Log("msg", "Telemeter server initialized.")
+	logger.Log(l, logger.Info, "msg", "Telemeter server initialized.")
 
 	if err := cmd.Execute(); err != nil {
-		level.Error(l).Log("err", err)
+		logger.Log(l, logger.Error, "err", err)
 		os.Exit(1)
 	}
 }
@@ -302,7 +302,7 @@ func (o *Options) Run() error {
 
 			w.Header().Add("Content-Type", "application/json")
 			if _, err := w.Write(internalPathJSON); err != nil {
-				level.Error(o.Logger).Log("msg", "could not write internal paths", "err", err)
+				logger.Log(o.Logger, logger.Error, "msg", "could not write internal paths", "err", err)
 			}
 		})
 
@@ -319,12 +319,12 @@ func (o *Options) Run() error {
 		g.Add(func() error {
 			if len(o.InternalTLSCertificatePath) > 0 {
 				if err := s.ServeTLS(internalListener, o.InternalTLSCertificatePath, o.InternalTLSKeyPath); err != nil && err != http.ErrServerClosed {
-					level.Error(o.Logger).Log("msg", "internal HTTPS server exited", "err", err)
+					logger.Log(o.Logger, logger.Error, "msg", "internal HTTPS server exited", "err", err)
 					return err
 				}
 			} else {
 				if err := s.Serve(internalListener); err != nil && err != http.ErrServerClosed {
-					level.Error(o.Logger).Log("msg", "internal HTTP server exited", "err", err)
+					logger.Log(o.Logger, logger.Error, "msg", "internal HTTP server exited", "err", err)
 					return err
 				}
 			}
@@ -370,7 +370,7 @@ func (o *Options) Run() error {
 					return fmt.Errorf("unknown key type in --shared-key")
 				}
 			} else {
-				level.Warn(o.Logger).Log("msg", "Using a generated shared-key")
+				logger.Log(o.Logger, logger.Warn, "msg", "Using a generated shared-key")
 
 				key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 				if err != nil {
@@ -486,7 +486,7 @@ func (o *Options) Run() error {
 		external.Get("/", func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Add("Content-Type", "application/json")
 			if _, err := w.Write(externalPathJSON); err != nil {
-				level.Error(o.Logger).Log("msg", "could not write external paths", "err", err)
+				logger.Log(o.Logger, logger.Error, "msg", "could not write external paths", "err", err)
 			}
 		})
 
@@ -503,12 +503,12 @@ func (o *Options) Run() error {
 		g.Add(func() error {
 			if len(o.TLSCertificatePath) > 0 {
 				if err := s.ServeTLS(externalListener, o.TLSCertificatePath, o.TLSKeyPath); err != nil && err != http.ErrServerClosed {
-					level.Error(o.Logger).Log("msg", "external HTTPS server exited", "err", err)
+					logger.Log(o.Logger, logger.Error, "msg", "external HTTPS server exited", "err", err)
 					return err
 				}
 			} else {
 				if err := s.Serve(externalListener); err != nil && err != http.ErrServerClosed {
-					level.Error(o.Logger).Log("msg", "external HTTP server exited", "err", err)
+					logger.Log(o.Logger, logger.Error, "msg", "external HTTP server exited", "err", err)
 					return err
 				}
 			}
@@ -519,7 +519,7 @@ func (o *Options) Run() error {
 		})
 	}
 
-	level.Info(o.Logger).Log("msg", "starting telemeter-server", "listen", o.Listen, "internal", o.ListenInternal)
+	logger.Log(o.Logger, logger.Info, "msg", "starting telemeter-server", "listen", o.Listen, "internal", o.ListenInternal)
 
 	return g.Run()
 }

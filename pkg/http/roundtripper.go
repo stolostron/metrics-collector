@@ -11,7 +11,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
+
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 )
 
 type bearerRoundTripper struct {
@@ -43,14 +44,16 @@ func (rt *debugRoundTripper) RoundTrip(req *http.Request) (res *http.Response, e
 
 	res, err = rt.next.RoundTrip(req)
 	if err != nil {
-		level.Error(rt.logger).Log("err", err)
+		logger.Log(rt.logger, logger.Error, "err", err)
 		return
 	}
 
 	resd, _ := httputil.DumpResponse(res, false)
 	resBody := bodyToString(&res.Body)
 
-	level.Debug(rt.logger).Log("msg", "round trip", "url", req.URL, "requestdump", string(reqd), "requestbody", reqBody, "responsedump", string(resd), "responsebody", resBody)
+	logger.Log(rt.logger, logger.Debug, "msg", "round trip", "url", req.URL,
+		"requestdump", string(reqd), "requestbody", reqBody,
+		"responsedump", string(resd), "responsebody", resBody)
 	return
 }
 

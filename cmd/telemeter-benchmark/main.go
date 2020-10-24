@@ -74,7 +74,7 @@ func main() {
 	l := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	lvl, err := cmd.Flags().GetString("log-level")
 	if err != nil {
-		level.Error(l).Log("msg", "could not parse log-level.")
+		logger.Log(l, logger.Error, "msg", "could not parse log-level.")
 	}
 	l = level.NewFilter(l, logger.LogLevelFromString(lvl))
 	l = log.WithPrefix(l, "ts", log.DefaultTimestampUTC)
@@ -83,7 +83,7 @@ func main() {
 	opt.Logger = l
 
 	if err := cmd.Execute(); err != nil {
-		level.Error(l).Log("err", err)
+		logger.Log(l, logger.Error, "err", err)
 		os.Exit(1)
 	}
 }
@@ -149,7 +149,7 @@ func runCmd() error {
 		return fmt.Errorf("failed to configure the Telemeter benchmarking tool: %v", err)
 	}
 
-	level.Info(opt.Logger).Log("msg", "starting telemeter-benchmark", "to", opt.To, "addr", opt.Listen)
+	logger.Log(opt.Logger, logger.Info, "msg", "starting telemeter-benchmark", "to", opt.To, "addr", opt.Listen)
 
 	var g run.Group
 	{
@@ -175,11 +175,11 @@ func runCmd() error {
 				select {
 				case <-hup:
 					if err := b.Reconfigure(cfg); err != nil {
-						level.Error(opt.Logger).Log("msg", "failed to reload config", "err", err)
+						logger.Log(opt.Logger, logger.Error, "msg", "failed to reload config", "err", err)
 						return err
 					}
 				case <-in:
-					level.Warn(opt.Logger).Log("msg", "caught interrupt; exiting gracefully...")
+					logger.Log(opt.Logger, logger.Warn, "msg", "caught interrupt; exiting gracefully...")
 					b.Stop()
 					return nil
 				case <-cancel:
@@ -207,7 +207,7 @@ func runCmd() error {
 		// Run the HTTP server.
 		g.Add(func() error {
 			if err := http.Serve(l, handlers); err != nil && err != http.ErrServerClosed {
-				level.Error(opt.Logger).Log("msg", "server exited unexpectedly", "err", err)
+				logger.Log(opt.Logger, logger.Error, "msg", "server exited unexpectedly", "err", err)
 				return err
 			}
 			return nil

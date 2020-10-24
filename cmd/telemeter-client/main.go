@@ -76,17 +76,17 @@ func main() {
 	l := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	lvl, err := cmd.Flags().GetString("log-level")
 	if err != nil {
-		level.Error(l).Log("msg", "could not parse log-level.")
+		logger.Log(l, logger.Error, "msg", "could not parse log-level.")
 	}
 	l = level.NewFilter(l, logger.LogLevelFromString(lvl))
 	l = log.WithPrefix(l, "ts", log.DefaultTimestampUTC)
 	l = log.WithPrefix(l, "caller", log.DefaultCaller)
 	stdlog.SetOutput(log.NewStdlibAdapter(l))
 	opt.Logger = l
-	level.Info(l).Log("msg", "telemeter client initialized")
+	logger.Log(l, logger.Info, "msg", "telemeter client initialized")
 
 	if err := cmd.Execute(); err != nil {
-		level.Error(l).Log("err", err)
+		logger.Log(l, logger.Error, "err", err)
 		os.Exit(1)
 	}
 }
@@ -204,7 +204,7 @@ func (o *Options) Run() error {
 		u.Path = path.Join(to.Path, "upload")
 		toUpload = &u
 	}
-	level.Info(o.Logger).Log("To Upload", toUpload)
+	logger.Log(o.Logger, logger.Info, "To Upload", toUpload)
 	// if toUpload == nil || toAuthorize == nil {
 	// 	return fmt.Errorf("either --to or --to-auth and --to-upload must be specified")
 	// }
@@ -258,7 +258,7 @@ func (o *Options) Run() error {
 		return fmt.Errorf("failed to configure Telemeter client: %v", err)
 	}
 
-	level.Info(o.Logger).Log("msg", "starting telemeter-client", "from", o.From, "to", o.To, "listen", o.Listen)
+	logger.Log(o.Logger, logger.Info, "msg", "starting telemeter-client", "from", o.From, "to", o.To, "listen", o.Listen)
 
 	var g run.Group
 	{
@@ -284,7 +284,7 @@ func (o *Options) Run() error {
 				select {
 				case <-hup:
 					if err := worker.Reconfigure(cfg); err != nil {
-						level.Error(o.Logger).Log("msg", "failed to reload config", "err", err)
+						logger.Log(o.Logger, logger.Error, "msg", "failed to reload config", "err", err)
 						return err
 					}
 				case <-cancel:
@@ -314,7 +314,7 @@ func (o *Options) Run() error {
 			// Run the HTTP server.
 			g.Add(func() error {
 				if err := http.Serve(l, handlers); err != nil && err != http.ErrServerClosed {
-					level.Error(o.Logger).Log("msg", "server exited unexpectedly", "err", err)
+					logger.Log(o.Logger, logger.Error, "msg", "server exited unexpectedly", "err", err)
 					return err
 				}
 				return nil
@@ -342,7 +342,7 @@ func serveLastMetrics(l log.Logger, worker *forwarder.Worker) http.Handler {
 				continue
 			}
 			if err := encoder.Encode(family); err != nil {
-				level.Error(l).Log("msg", "unable to write metrics for family", "err", err)
+				logger.Log(l, logger.Error, "msg", "unable to write metrics for family", "err", err)
 				break
 			}
 		}

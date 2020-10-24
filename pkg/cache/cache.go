@@ -7,9 +7,10 @@ import (
 	"net/http/httputil"
 
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 )
 
 // Cacher is able to get and set key value pairs.
@@ -60,12 +61,12 @@ func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 		defer func() {
 			raw, err := httputil.DumpResponse(resp, true)
 			if err != nil {
-				level.Error(r.l).Log("msg", "failed to dump response", "err", err)
+				logger.Log(r.l, logger.Error, "msg", "failed to dump response", "err", err)
 				return
 			}
 			if err := r.c.Set(key, raw); err != nil {
 				r.cacheWritesTotal.WithLabelValues("error").Inc()
-				level.Error(r.l).Log("msg", "failed to set value in cache", "err", err)
+				logger.Log(r.l, logger.Error, "msg", "failed to set value in cache", "err", err)
 				return
 			}
 			r.cacheWritesTotal.WithLabelValues("success").Inc()

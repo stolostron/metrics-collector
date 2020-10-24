@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/prompb"
+
+	mlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
 )
 
 const forwardTimeout = 5 * time.Second
@@ -74,7 +75,7 @@ func (h *Handler) Receive(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequest(http.MethodPost, h.ForwardURL, r.Body)
 	if err != nil {
-		level.Error(h.logger).Log("msg", "failed to create forward request", "err", err)
+		mlogger.Log(h.logger, mlogger.Error, "msg", "failed to create forward request", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -84,7 +85,7 @@ func (h *Handler) Receive(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.client.Do(req)
 	if err != nil {
 		h.forwardRequestsTotal.WithLabelValues("error").Inc()
-		level.Error(h.logger).Log("msg", "failed to forward request", "err", err)
+		mlogger.Log(h.logger, mlogger.Error, "msg", "failed to forward request", "err", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
@@ -92,7 +93,7 @@ func (h *Handler) Receive(w http.ResponseWriter, r *http.Request) {
 	if resp.StatusCode/100 != 2 {
 		msg := "upstream response status is not 200 OK"
 		h.forwardRequestsTotal.WithLabelValues("error").Inc()
-		level.Error(h.logger).Log("msg", msg, "statuscode", resp.Status)
+		mlogger.Log(h.logger, mlogger.Error, "msg", msg, "statuscode", resp.Status)
 		http.Error(w, msg, resp.StatusCode)
 		return
 	}
@@ -137,7 +138,7 @@ func ValidateLabels(logger log.Logger, next http.Handler, labels ...string) http
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			level.Error(logger).Log("msg", "failed to read body", "err", err)
+			mlogger.Log(logger, mlogger.Error, "msg", "failed to read body", "err", err)
 			http.Error(w, "failed to read body", http.StatusInternalServerError)
 			return
 		}
@@ -148,14 +149,14 @@ func ValidateLabels(logger log.Logger, next http.Handler, labels ...string) http
 
 		content, err := snappy.Decode(nil, body)
 		if err != nil {
-			level.Warn(logger).Log("msg", "failed to decode request body", "err", err)
+			mlogger.Log(logger, mlogger.Warn, "msg", "failed to decode request body", "err", err)
 			http.Error(w, "failed to decode request body", http.StatusBadRequest)
 			return
 		}
 
 		var wreq prompb.WriteRequest
 		if err := proto.Unmarshal(content, &wreq); err != nil {
-			level.Warn(logger).Log("msg", "failed to decode protobuf from body", "err", err)
+			mlogger.Log(logger, mlogger.Warn, "msg", "failed to decode protobuf from body", "err", err)
 			http.Error(w, "failed to decode protobuf from body", http.StatusBadRequest)
 			return
 		}
@@ -163,7 +164,7 @@ func ValidateLabels(logger log.Logger, next http.Handler, labels ...string) http
 		for _, ts := range wreq.GetTimeseries() {
 			// exit early if not enough labels anyway
 			if len(ts.GetLabels()) < len(labels) {
-				level.Warn(logger).Log("msg", "request is missing required labels", "err", ErrRequiredLabelMissing)
+				mlogger.Log(logger, mlogger.Warn, "msg", "request is missing required labels", "err", ErrRequiredLabelMissing)
 				http.Error(w, ErrRequiredLabelMissing.Error(), http.StatusBadRequest)
 				return
 			}
@@ -177,7 +178,7 @@ func ValidateLabels(logger log.Logger, next http.Handler, labels ...string) http
 			}
 
 			if len(labels) != found {
-				level.Warn(logger).Log("msg", "request is missing required labels", "err", ErrRequiredLabelMissing)
+				mlogger.Log(logger, mlogger.Warn, "msg", "request is missing required labels", "err", ErrRequiredLabelMissing)
 				http.Error(w, ErrRequiredLabelMissing.Error(), http.StatusBadRequest)
 				return
 			}
