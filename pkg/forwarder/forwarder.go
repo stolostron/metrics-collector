@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
@@ -324,12 +323,12 @@ func (w *Worker) forward(ctx context.Context) error {
 	w.lastMetrics = families
 
 	if len(families) == 0 {
-		level.Warn(w.logger).Log("msg", "no metrics to send, doing nothing")
+		rlogger.Log(w.logger, rlogger.Warn, "msg", "no metrics to send, doing nothing")
 		return nil
 	}
 
 	if w.to == nil {
-		level.Warn(w.logger).Log("msg", "to is nil, doing nothing")
+		rlogger.Log(w.logger, rlogger.Warn, "msg", "to is nil, doing nothing")
 		return nil
 	}
 

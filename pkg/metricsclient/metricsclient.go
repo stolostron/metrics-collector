@@ -149,7 +149,9 @@ func (c *Client) Send(ctx context.Context, req *http.Request, families []*client
 			if _, err := io.Copy(ioutil.Discard, resp.Body); err != nil {
 				logger.Log(c.logger, logger.Error, "msg", "error copying body", "err", err)
 			}
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				logger.Log(c.logger, logger.Error, "msg", "error closing body", "err", err)
+			}
 		}()
 		logger.Log(c.logger, logger.Debug, "msg", resp.StatusCode)
 		switch resp.StatusCode {
@@ -282,6 +284,7 @@ func MTLSTransport(logger log.Logger) (*http.Transport, error) {
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caCertPool,
+		MinVersion: tls.VersionTLS12,
 	}
 	return &http.Transport{
 		Dial: (&net.Dialer{

@@ -319,7 +319,10 @@ func (o *Options) Run() error {
 				}
 				return nil
 			}, func(error) {
-				l.Close()
+				err := l.Close()
+				if err != nil{
+					logger.Log(o.Logger, logger.Error, "msg", "failed to close listener", "err", err)
+				}
 			})
 		}
 	}

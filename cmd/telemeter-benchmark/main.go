@@ -212,7 +212,10 @@ func runCmd() error {
 			}
 			return nil
 		}, func(error) {
-			l.Close()
+			err := l.Close()
+			if err != nil{
+				logger.Log(opt.Logger, logger.Error, "msg", "failed to close listener", "err", err)
+			}
 		})
 	}
 

@@ -331,7 +331,10 @@ func (o *Options) Run() error {
 			return nil
 		}, func(error) {
 			_ = s.Shutdown(context.TODO())
-			internalListener.Close()
+			err := internalListener.Close()
+			if err != nil {
+				logger.Log(o.Logger, logger.Error, "msg", "failed to close internal listener", "err", err)
+			}
 		})
 	}
 	{
@@ -515,7 +518,11 @@ func (o *Options) Run() error {
 			return nil
 		}, func(error) {
 			_ = s.Shutdown(context.TODO())
-			externalListener.Close()
+			err := externalListener.Close()
+			if err != nil {
+				logger.Log(o.Logger, logger.Error, "msg", "failed to close external listener", "err", err)
+			}
+
 		})
 	}
 

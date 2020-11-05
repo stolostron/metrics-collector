@@ -85,7 +85,9 @@ func AgainstEndpoint(logger log.Logger, client *http.Client, endpoint *url.URL, 
 			if _, err := io.Copy(ioutil.Discard, res.Body); err != nil {
 				rlogger.Log(logger, rlogger.Error, "msg", "error copying body", "err", err)
 			}
-			res.Body.Close()
+			if err :=  res.Body.Close(); err != nil {
+				rlogger.Log(logger, rlogger.Error, "msg", "error closing body", "err", err)
+			}
 		}
 	}()
 
