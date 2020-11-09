@@ -217,10 +217,13 @@ func Write(w io.Writer, families []*clientmodel.MetricFamily) error {
 
 func withCancel(ctx context.Context, client *http.Client, req *http.Request, fn func(*http.Response) error) error {
 	resp, err := client.Do(req)
-	defer func() {
+	defer func() error {
 		if resp != nil {
-			resp.Body.Close()
+			if err = resp.Body.Close(); err != nil {
+				return err
+			}
 		}
+		return nil
 	}()
 	if err != nil {
 		return err
@@ -284,7 +287,7 @@ func MTLSTransport(logger log.Logger) (*http.Transport, error) {
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caCertPool,
-		MinVersion: tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS12,
 	}
 	return &http.Transport{
 		Dial: (&net.Dialer{
