@@ -416,7 +416,8 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request,
 			return err
 		}
 	}
-
+	msg := fmt.Sprintf("Metrics pushed successfully")
+	logger.Log(c.logger, logger.Info, "msg", msg)
 	return nil
 }
 
@@ -453,7 +454,5 @@ func (c *Client) sendRequest(serverURL string, body []byte) error {
 		logger.Log(c.logger, logger.Warn, msg)
 		return fmt.Errorf(msg)
 	}
-	msg := fmt.Sprintf("Thanos response status code is %s", resp.Status)
-	logger.Log(c.logger, logger.Debug, "msg", msg)
 	return nil
 }

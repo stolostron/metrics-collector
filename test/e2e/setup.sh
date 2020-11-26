@@ -175,7 +175,7 @@ deploy_metrics_collector() {
 	
 	while true ; do   
 	  count=`expr $count + 1`
-	  result=$(kubectl logs $POD | grep -i "Thanos response status code is 200 OK" > /dev/null && echo "SUCCESS" || echo "FAILURE")
+	  result=$(kubectl logs $POD | grep -i "Metrics pushed successfully" > /dev/null && echo "SUCCESS" || echo "FAILURE")
 	  if [ $result == "SUCCESS"  ]
 	  then
 	     echo "SUCCESS sending metrics to Thanos"
