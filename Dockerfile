@@ -5,7 +5,7 @@ COPY . /go/src/github.com/open-cluster-management/metrics-collector
 RUN cd /go/src/github.com/open-cluster-management/metrics-collector && \
     go build ./cmd/telemeter-client
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.2
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 ARG VCS_REF
 ARG VCS_URL
