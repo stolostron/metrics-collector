@@ -50,7 +50,7 @@ DOCS=$(shell grep -rlF [embedmd] docs)
 
 export PATH := $(BIN_DIR):$(PATH)
 
-GO_BUILD_RECIPE=GOOS=linux CGO_ENABLED=0 go build
+GO_BUILD_RECIPE=CGO_ENABLED=0 go build
 CONTAINER_CMD:=docker run --rm \
 		-u="$(shell id -u):$(shell id -g)" \
 		-v "$(shell go env GOCACHE):/.cache/go-build" \
