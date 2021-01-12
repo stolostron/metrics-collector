@@ -315,6 +315,7 @@ func DefaultTransport(logger log.Logger, isTLS bool) *http.Transport {
 func convertToTimeseries(p *PartitionedMetrics, now time.Time) ([]prompb.TimeSeries, error) {
 	var timeseries []prompb.TimeSeries
 
+	timestamp := now.UnixNano() / int64(time.Millisecond)
 	for _, f := range p.Families {
 		for _, m := range f.Metric {
 			var ts prompb.TimeSeries
@@ -333,6 +334,10 @@ func convertToTimeseries(p *PartitionedMetrics, now time.Time) ([]prompb.TimeSer
 
 			s := prompb.Sample{
 				Timestamp: *m.TimestampMs,
+			}
+			// If the sample is in the future, overwrite it.
+			if *m.TimestampMs > timestamp {
+				s.Timestamp = timestamp
 			}
 
 			switch *f.Type {
@@ -378,7 +383,7 @@ func (c *Client) RemoteWrite(ctx context.Context, req *http.Request,
 		logger.Log(c.logger, logger.Info, "msg", "no time series to forward to receive endpoint")
 		return nil
 	}
-	logger.Log(c.logger, logger.Debug, "timeseries length", len(timeseries))
+	logger.Log(c.logger, logger.Debug, "timeseries number", len(timeseries))
 
 	for i := 0; i < len(timeseries); i += maxSeriesLength {
 		length := len(timeseries)
