@@ -5,11 +5,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"sync"
 	"testing"
 
 	"github.com/go-kit/kit/log"
 )
+
+func init() {
+	os.Setenv("UNIT_TEST", "true")
+}
 
 func TestNew(t *testing.T) {
 	from, err := url.Parse("https://redhat.com")

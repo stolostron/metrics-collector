@@ -23,11 +23,12 @@ import (
 	rlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
+	"github.com/open-cluster-management/metrics-collector/pkg/status"
 )
 
-type RuleMatcher interface {
-	MatchRules() []string
-}
+const (
+	failedStatusReportMsg = "Failed to report status"
+)
 
 var (
 	gaugeFederateSamples = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -43,6 +44,10 @@ var (
 		Help: "The number of times forwarding federated metrics has failed",
 	})
 )
+
+type RuleMatcher interface {
+	MatchRules() []string
+}
 
 func init() {
 	prometheus.MustRegister(
@@ -93,6 +98,107 @@ type Worker struct {
 	reconfigure chan struct{}
 
 	logger log.Logger
+
+	status status.StatusReport
+}
+
+func createClients(cfg Config, interval time.Duration,
+	logger log.Logger) (*metricsclient.Client, *metricsclient.Client, metricfamily.MultiTransformer, error) {
+
+	var transformer metricfamily.MultiTransformer
+
+	// Configure the anonymization.
+	anonymizeSalt := cfg.AnonymizeSalt
+	if len(cfg.AnonymizeSalt) == 0 && len(cfg.AnonymizeSaltFile) > 0 {
+		data, err := ioutil.ReadFile(cfg.AnonymizeSaltFile)
+		if err != nil {
+			return nil, nil, transformer, fmt.Errorf("failed to read anonymize-salt-file: %v", err)
+		}
+		anonymizeSalt = strings.TrimSpace(string(data))
+	}
+	if len(cfg.AnonymizeLabels) != 0 && len(anonymizeSalt) == 0 {
+		return nil, nil, transformer, fmt.Errorf("anonymize-salt must be specified if anonymize-labels is set")
+	}
+	if len(cfg.AnonymizeLabels) == 0 {
+		rlogger.Log(logger, rlogger.Warn, "msg", "not anonymizing any labels")
+	}
+
+	// Configure a transformer.
+	if cfg.Transformer != nil {
+		transformer.With(cfg.Transformer)
+	}
+	if len(cfg.AnonymizeLabels) > 0 {
+		transformer.With(metricfamily.NewMetricsAnonymizer(anonymizeSalt, cfg.AnonymizeLabels, nil))
+	}
+
+	fromTransport := metricsclient.DefaultTransport(logger, false)
+	if len(cfg.FromCAFile) > 0 {
+		if fromTransport.TLSClientConfig == nil {
+			fromTransport.TLSClientConfig = &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			}
+		}
+		pool, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, nil, transformer, fmt.Errorf("failed to read system certificates: %v", err)
+		}
+		data, err := ioutil.ReadFile(cfg.FromCAFile)
+		if err != nil {
+			return nil, nil, transformer, fmt.Errorf("failed to read from-ca-file: %v", err)
+		}
+		if !pool.AppendCertsFromPEM(data) {
+			rlogger.Log(logger, rlogger.Warn, "msg", "no certs found in from-ca-file")
+		}
+		fromTransport.TLSClientConfig.RootCAs = pool
+	}
+
+	// Create the `fromClient`.
+	fromClient := &http.Client{Transport: fromTransport}
+	if cfg.Debug {
+		fromClient.Transport = telemeterhttp.NewDebugRoundTripper(logger, fromClient.Transport)
+	}
+	if len(cfg.FromToken) == 0 && len(cfg.FromTokenFile) > 0 {
+		data, err := ioutil.ReadFile(cfg.FromTokenFile)
+		if err != nil {
+			return nil, nil, transformer, fmt.Errorf("unable to read from-token-file: %v", err)
+		}
+		cfg.FromToken = strings.TrimSpace(string(data))
+	}
+	if len(cfg.FromToken) > 0 {
+		fromClient.Transport = telemeterhttp.NewBearerRoundTripper(cfg.FromToken, fromClient.Transport)
+	}
+	from := metricsclient.New(logger, fromClient, cfg.LimitBytes, interval, "federate_from")
+
+	// Create the `toClient`.
+
+	toTransport, err := metricsclient.MTLSTransport(logger)
+	if err != nil {
+		return nil, nil, transformer, errors.New(err.Error())
+	}
+	toTransport.Proxy = http.ProxyFromEnvironment
+	toClient := &http.Client{Transport: toTransport}
+	if cfg.Debug {
+		toClient.Transport = telemeterhttp.NewDebugRoundTripper(logger, toClient.Transport)
+	}
+	if len(cfg.ToToken) == 0 && len(cfg.ToTokenFile) > 0 {
+		data, err := ioutil.ReadFile(cfg.ToTokenFile)
+		if err != nil {
+			return nil, nil, transformer, fmt.Errorf("unable to read to-token-file: %v", err)
+		}
+		cfg.ToToken = strings.TrimSpace(string(data))
+	}
+	if (len(cfg.ToToken) > 0) != (cfg.ToAuthorize != nil) {
+		return nil, nil, transformer, errors.New("an authorization URL and authorization token must both specified or empty")
+	}
+	if len(cfg.ToToken) > 0 {
+		// Exchange our token for a token from the authorize endpoint, which also gives us a
+		// set of expected labels we must include.
+		rt := authorize.NewServerRotatingRoundTripper(cfg.ToToken, cfg.ToAuthorize, toClient.Transport)
+		toClient.Transport = rt
+		transformer.With(metricfamily.NewLabel(nil, rt))
+	}
+	to := metricsclient.New(logger, toClient, cfg.LimitBytes, interval, "federate_to")
+	return from, to, transformer, nil
 }
 
 // New creates a new Worker based on the provided Config. If the Config contains invalid
@@ -115,98 +221,12 @@ func New(cfg Config) (*Worker, error) {
 		w.interval = 4*time.Minute + 30*time.Second
 	}
 
-	// Configure the anonymization.
-	anonymizeSalt := cfg.AnonymizeSalt
-	if len(cfg.AnonymizeSalt) == 0 && len(cfg.AnonymizeSaltFile) > 0 {
-		data, err := ioutil.ReadFile(cfg.AnonymizeSaltFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read anonymize-salt-file: %v", err)
-		}
-		anonymizeSalt = strings.TrimSpace(string(data))
-	}
-	if len(cfg.AnonymizeLabels) != 0 && len(anonymizeSalt) == 0 {
-		return nil, fmt.Errorf("anonymize-salt must be specified if anonymize-labels is set")
-	}
-	if len(cfg.AnonymizeLabels) == 0 {
-		rlogger.Log(logger, rlogger.Warn, "msg", "not anonymizing any labels")
-	}
-
-	// Configure a transformer.
-	var transformer metricfamily.MultiTransformer
-	if cfg.Transformer != nil {
-		transformer.With(cfg.Transformer)
-	}
-	if len(cfg.AnonymizeLabels) > 0 {
-		transformer.With(metricfamily.NewMetricsAnonymizer(anonymizeSalt, cfg.AnonymizeLabels, nil))
-	}
-
-	fromTransport := metricsclient.DefaultTransport(logger, false)
-	if len(cfg.FromCAFile) > 0 {
-		if fromTransport.TLSClientConfig == nil {
-			fromTransport.TLSClientConfig = &tls.Config{
-				MinVersion: tls.VersionTLS12,
-			}
-		}
-		pool, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, fmt.Errorf("failed to read system certificates: %v", err)
-		}
-		data, err := ioutil.ReadFile(cfg.FromCAFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read from-ca-file: %v", err)
-		}
-		if !pool.AppendCertsFromPEM(data) {
-			rlogger.Log(logger, rlogger.Warn, "msg", "no certs found in from-ca-file")
-		}
-		fromTransport.TLSClientConfig.RootCAs = pool
-	}
-
-	// Create the `fromClient`.
-	fromClient := &http.Client{Transport: fromTransport}
-	if cfg.Debug {
-		fromClient.Transport = telemeterhttp.NewDebugRoundTripper(logger, fromClient.Transport)
-	}
-	if len(cfg.FromToken) == 0 && len(cfg.FromTokenFile) > 0 {
-		data, err := ioutil.ReadFile(cfg.FromTokenFile)
-		if err != nil {
-			return nil, fmt.Errorf("unable to read from-token-file: %v", err)
-		}
-		cfg.FromToken = strings.TrimSpace(string(data))
-	}
-	if len(cfg.FromToken) > 0 {
-		fromClient.Transport = telemeterhttp.NewBearerRoundTripper(cfg.FromToken, fromClient.Transport)
-	}
-	w.fromClient = metricsclient.New(logger, fromClient, cfg.LimitBytes, w.interval, "federate_from")
-
-	// Create the `toClient`.
-
-	toTransport, err := metricsclient.MTLSTransport(logger)
+	fromClient, toClient, transformer, err := createClients(cfg, w.interval, logger)
 	if err != nil {
-		return nil, errors.New(err.Error())
+		return nil, err
 	}
-	toTransport.Proxy = http.ProxyFromEnvironment
-	toClient := &http.Client{Transport: toTransport}
-	if cfg.Debug {
-		toClient.Transport = telemeterhttp.NewDebugRoundTripper(logger, toClient.Transport)
-	}
-	if len(cfg.ToToken) == 0 && len(cfg.ToTokenFile) > 0 {
-		data, err := ioutil.ReadFile(cfg.ToTokenFile)
-		if err != nil {
-			return nil, fmt.Errorf("unable to read to-token-file: %v", err)
-		}
-		cfg.ToToken = strings.TrimSpace(string(data))
-	}
-	if (len(cfg.ToToken) > 0) != (cfg.ToAuthorize != nil) {
-		return nil, errors.New("an authorization URL and authorization token must both specified or empty")
-	}
-	if len(cfg.ToToken) > 0 {
-		// Exchange our token for a token from the authorize endpoint, which also gives us a
-		// set of expected labels we must include.
-		rt := authorize.NewServerRotatingRoundTripper(cfg.ToToken, cfg.ToAuthorize, toClient.Transport)
-		toClient.Transport = rt
-		transformer.With(metricfamily.NewLabel(nil, rt))
-	}
-	w.toClient = metricsclient.New(logger, toClient, cfg.LimitBytes, w.interval, "federate_to")
+	w.fromClient = fromClient
+	w.toClient = toClient
 	w.transformer = transformer
 
 	// Configure the matching rules.
@@ -228,6 +248,12 @@ func New(cfg Config) (*Worker, error) {
 		i++
 	}
 	w.rules = rules
+
+	s, err := status.New(logger)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create StatusReport: %v", err)
+	}
+	w.status = *s
 
 	return &w, nil
 }
@@ -306,11 +332,19 @@ func (w *Worker) forward(ctx context.Context) error {
 	req := &http.Request{Method: "GET", URL: from}
 	families, err := w.fromClient.Retrieve(ctx, req)
 	if err != nil {
+		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve metrics")
+		if statusErr != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+		}
 		return err
 	}
 
 	before := metricfamily.MetricsCount(families)
 	if err := metricfamily.Filter(families, w.transformer); err != nil {
+		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to filter metrics")
+		if statusErr != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+		}
 		return err
 	}
 
@@ -324,14 +358,34 @@ func (w *Worker) forward(ctx context.Context) error {
 
 	if len(families) == 0 {
 		rlogger.Log(w.logger, rlogger.Warn, "msg", "no metrics to send, doing nothing")
+		statusErr := w.status.UpdateStatus("Available", "Available", "No metrics to send")
+		if statusErr != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+		}
 		return nil
 	}
 
 	if w.to == nil {
 		rlogger.Log(w.logger, rlogger.Warn, "msg", "to is nil, doing nothing")
+		statusErr := w.status.UpdateStatus("Available", "Available", "Metrics is not required to send")
+		if statusErr != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+		}
 		return nil
 	}
 
 	req = &http.Request{Method: "POST", URL: w.to}
-	return w.toClient.RemoteWrite(ctx, req, families, w.interval)
+	err = w.toClient.RemoteWrite(ctx, req, families, w.interval)
+	if err != nil {
+		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to send metrics")
+		if statusErr != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+		}
+	} else {
+		statusErr := w.status.UpdateStatus("Available", "Available", "Send metrics successfully")
+		if statusErr != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+		}
+	}
+	return err
 }
