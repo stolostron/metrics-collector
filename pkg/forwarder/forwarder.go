@@ -18,8 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
-	telemeterhttp "github.com/open-cluster-management/metrics-collector/pkg/http"
+	metricshttp "github.com/open-cluster-management/metrics-collector/pkg/http"
 	rlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
@@ -59,12 +58,9 @@ func init() {
 // The only required field is `From`.
 type Config struct {
 	From          *url.URL
-	ToAuthorize   *url.URL
 	ToUpload      *url.URL
 	FromToken     string
-	ToToken       string
 	FromTokenFile string
-	ToTokenFile   string
 	FromCAFile    string
 
 	AnonymizeLabels   []string
@@ -155,7 +151,7 @@ func createClients(cfg Config, interval time.Duration,
 	// Create the `fromClient`.
 	fromClient := &http.Client{Transport: fromTransport}
 	if cfg.Debug {
-		fromClient.Transport = telemeterhttp.NewDebugRoundTripper(logger, fromClient.Transport)
+		fromClient.Transport = metricshttp.NewDebugRoundTripper(logger, fromClient.Transport)
 	}
 	if len(cfg.FromToken) == 0 && len(cfg.FromTokenFile) > 0 {
 		data, err := ioutil.ReadFile(cfg.FromTokenFile)
@@ -165,7 +161,7 @@ func createClients(cfg Config, interval time.Duration,
 		cfg.FromToken = strings.TrimSpace(string(data))
 	}
 	if len(cfg.FromToken) > 0 {
-		fromClient.Transport = telemeterhttp.NewBearerRoundTripper(cfg.FromToken, fromClient.Transport)
+		fromClient.Transport = metricshttp.NewBearerRoundTripper(cfg.FromToken, fromClient.Transport)
 	}
 	from := metricsclient.New(logger, fromClient, cfg.LimitBytes, interval, "federate_from")
 
@@ -178,24 +174,7 @@ func createClients(cfg Config, interval time.Duration,
 	toTransport.Proxy = http.ProxyFromEnvironment
 	toClient := &http.Client{Transport: toTransport}
 	if cfg.Debug {
-		toClient.Transport = telemeterhttp.NewDebugRoundTripper(logger, toClient.Transport)
-	}
-	if len(cfg.ToToken) == 0 && len(cfg.ToTokenFile) > 0 {
-		data, err := ioutil.ReadFile(cfg.ToTokenFile)
-		if err != nil {
-			return nil, nil, transformer, fmt.Errorf("unable to read to-token-file: %v", err)
-		}
-		cfg.ToToken = strings.TrimSpace(string(data))
-	}
-	if (len(cfg.ToToken) > 0) != (cfg.ToAuthorize != nil) {
-		return nil, nil, transformer, errors.New("an authorization URL and authorization token must both specified or empty")
-	}
-	if len(cfg.ToToken) > 0 {
-		// Exchange our token for a token from the authorize endpoint, which also gives us a
-		// set of expected labels we must include.
-		rt := authorize.NewServerRotatingRoundTripper(cfg.ToToken, cfg.ToAuthorize, toClient.Transport)
-		toClient.Transport = rt
-		transformer.With(metricfamily.NewLabel(nil, rt))
+		toClient.Transport = metricshttp.NewDebugRoundTripper(logger, toClient.Transport)
 	}
 	to := metricsclient.New(logger, toClient, cfg.LimitBytes, interval, "federate_to")
 	return from, to, transformer, nil

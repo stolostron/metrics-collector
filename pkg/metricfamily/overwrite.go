@@ -13,7 +13,7 @@ const driftRange = 5 * time.Minute
 
 var (
 	overwrittenMetrics = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "telemeter_overwritten_timestamps_total",
+		Name: "metricscollector_overwritten_timestamps_total",
 		Help: "Number of timestamps that were in the past, present or future",
 	}, []string{"tense"})
 )
@@ -23,10 +23,6 @@ func init() {
 }
 
 // OverwriteTimestamps sets all timestamps to the current time.
-// We essentially already do this in Telemeter v1 by dropping all timestamps on Telemeter Servers
-// and then when federating Telemeter Prometheus sets its own current timestamp.
-// For v2 we want to be consistent when using remote-write and thus we overwrite the timestamps
-// on Telemeter Server already to forward the same timestamps to both systems.
 func OverwriteTimestamps(now func() time.Time) TransformerFunc {
 	return func(family *client.MetricFamily) (bool, error) {
 		timestamp := now().Unix() * 1000

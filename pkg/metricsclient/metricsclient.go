@@ -27,7 +27,6 @@ import (
 
 	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/reader"
-	"github.com/open-cluster-management/metrics-collector/pkg/utils"
 )
 
 const (
@@ -61,8 +60,7 @@ type Client struct {
 }
 
 type PartitionedMetrics struct {
-	ClusterID string
-	Families  []*clientmodel.MetricFamily
+	Families []*clientmodel.MetricFamily
 }
 
 func New(logger log.Logger, client *http.Client, maxBytes int64, timeout time.Duration, metricsName string) *Client {
@@ -364,15 +362,8 @@ func convertToTimeseries(p *PartitionedMetrics, now time.Time) ([]prompb.TimeSer
 // RemoteWrite is used to push the metrics to remote thanos endpoint
 func (c *Client) RemoteWrite(ctx context.Context, req *http.Request,
 	families []*clientmodel.MetricFamily, interval time.Duration) error {
-	clusterID, ok := utils.ClusterIDFromContext(ctx)
-	if ok {
-		logger.Log(c.logger, logger.Debug, "ClusterID", clusterID)
-	} else {
-		msg := "cluster ID not set "
-		logger.Log(c.logger, logger.Warn, "msg", msg)
-	}
 
-	timeseries, err := convertToTimeseries(&PartitionedMetrics{ClusterID: clusterID, Families: families}, time.Now())
+	timeseries, err := convertToTimeseries(&PartitionedMetrics{Families: families}, time.Now())
 	if err != nil {
 		msg := "failed to convert timeseries"
 		logger.Log(c.logger, logger.Warn, "msg", msg, "err", err)

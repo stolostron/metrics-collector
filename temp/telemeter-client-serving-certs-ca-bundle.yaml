@@ -1,9 +1,0 @@
-kind: ConfigMap
-apiVersion: v1
-metadata:
-  name: telemeter-client-serving-certs-ca-bundle
-  namespace: open-cluster-management-monitoring
-  annotations:
-    service.alpha.openshift.io/inject-cabundle: 'true'
-data:
-  service-ca.crt: ""

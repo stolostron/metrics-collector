@@ -1,13 +1,5 @@
-/telemeter-benchmark
-/telemeter-client
-/telemeter-server
-/authorization-server
 /_output
-telemeter-bench
 /bin
-/benchmark
-benchmark.pdf
-/docs/telemeter_query
 /vendor
 
 # These are empty target files, created on every docker build. Their sole

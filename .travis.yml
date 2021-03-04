@@ -18,7 +18,7 @@ addons:
 
 branches:
   only:
-    - master
+    - main
     - /^release-[0-9]+\..*$/
 
 env:
@@ -28,11 +28,11 @@ env:
     - COMPONENT_TAG_EXTENSION="-${TRAVIS_COMMIT}"
 
     # Component Specific 
-    - COMPONENT_DEPLOY_COMMAND=${TRAVIS_BUILD_DIR}/build/deploy-to-cluster.sh
-    - COMPONENT_INIT_COMMAND=${TRAVIS_BUILD_DIR}/build/install-dependencies.sh
-    - COMPONENT_BUILD_COMMAND=${TRAVIS_BUILD_DIR}/build/build.sh
-    - COMPONENT_UNIT_TEST_COMMAND=${TRAVIS_BUILD_DIR}/build/run-unit-tests.sh
-    - COMPONENT_E2E_TEST_COMMAND=${TRAVIS_BUILD_DIR}/build/run-e2e-tests.sh
+    - COMPONENT_DEPLOY_COMMAND=${TRAVIS_BUILD_DIR}/cicd-scripts/deploy-to-cluster.sh
+    - COMPONENT_INIT_COMMAND=${TRAVIS_BUILD_DIR}/cicd-scripts/install-dependencies.sh
+    - COMPONENT_BUILD_COMMAND=${TRAVIS_BUILD_DIR}/cicd-scripts/build.sh
+    - COMPONENT_UNIT_TEST_COMMAND=${TRAVIS_BUILD_DIR}/cicd-scripts/run-unit-tests.sh
+    - COMPONENT_E2E_TEST_COMMAND=${TRAVIS_BUILD_DIR}/cicd-scripts/run-e2e-tests.sh
 
     - GO111MODULE=on
 
@@ -75,8 +75,8 @@ jobs:
         - make component/pull
         - make component/test/e2e
     - stage: release-ff
-      name: "Push commits from master to branch defined in RELEASE_FF_BRANCH"
-      if: type = push AND branch =~ /^master$/
+      name: "Push commits from main to branch defined in RELEASE_FF_BRANCH"
+      if: type = push AND branch =~ /^main$/
       script:
         - make release-ff
     - stage: publish

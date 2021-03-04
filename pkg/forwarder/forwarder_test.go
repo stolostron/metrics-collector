@@ -21,10 +21,6 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse `from` URL: %v", err)
 	}
-	toAuthorize, err := url.Parse("https://openshift.com")
-	if err != nil {
-		t.Fatalf("failed to parse `toAuthorize` URL: %v", err)
-	}
 	toUpload, err := url.Parse("https://k8s.io")
 	if err != nil {
 		t.Fatalf("failed to parse `toUpload` URL: %v", err)
@@ -57,48 +53,11 @@ func TestNew(t *testing.T) {
 			err: false,
 		},
 		{
-			// Providing `ToAuthorize` without `ToToken` should error.
-			c: Config{
-				From:        from,
-				ToAuthorize: toAuthorize,
-				Logger:      log.NewNopLogger(),
-			},
-			err: true,
-		},
-		{
-			// Providing `ToToken` without `ToAuthorize` should error.
-			c: Config{
-				From:    from,
-				ToToken: "foo",
-				Logger:  log.NewNopLogger(),
-			},
-			err: true,
-		},
-		{
-			// Providing `ToAuthorize` and `ToToken` should not error.
-			c: Config{
-				From:        from,
-				ToAuthorize: toAuthorize,
-				ToToken:     "foo",
-				Logger:      log.NewNopLogger(),
-			},
-			err: false,
-		},
-		{
 			// Providing an invalid `FromTokenFile` file should error.
 			c: Config{
 				From:          from,
 				FromTokenFile: "/this/path/does/not/exist",
 				Logger:        log.NewNopLogger(),
-			},
-			err: true,
-		},
-		{
-			// Providing an invalid `ToTokenFile` file should error.
-			c: Config{
-				From:        from,
-				ToTokenFile: "/this/path/does/not/exist",
-				Logger:      log.NewNopLogger(),
 			},
 			err: true,
 		},

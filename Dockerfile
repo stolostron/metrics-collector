@@ -3,7 +3,7 @@ FROM openshift/origin-release:golang-1.13 AS builder
 ENV GOFLAGS="-mod=vendor"
 COPY . /go/src/github.com/open-cluster-management/metrics-collector
 RUN cd /go/src/github.com/open-cluster-management/metrics-collector && \
-    go build ./cmd/telemeter-client
+    go build ./cmd/metrics-collector
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
@@ -43,4 +43,5 @@ RUN microdnf update &&\
     mkdir /licenses &&\
     microdnf clean all
 
-COPY --from=builder /go/src/github.com/open-cluster-management/metrics-collector/telemeter-client /usr/bin/
+COPY --from=builder /go/src/github.com/open-cluster-management/metrics-collector/metrics-collector /usr/bin/
+RUN cp /usr/bin/metrics-collector /usr/bin/telemeter-client

@@ -56,7 +56,6 @@ func Test_convertToTimeseries(t *testing.T) {
 	}{{
 		name: "counter",
 		in: &PartitionedMetrics{
-			ClusterID: "foo",
 			Families: []*clientmodel.MetricFamily{{
 				Name: &fooMetricName,
 				Help: &fooHelp,
@@ -94,7 +93,6 @@ func Test_convertToTimeseries(t *testing.T) {
 	}, {
 		name: "gauge",
 		in: &PartitionedMetrics{
-			ClusterID: "foo",
 			Families: []*clientmodel.MetricFamily{{
 				Name: &fooMetricName,
 				Help: &fooHelp,
@@ -132,7 +130,6 @@ func Test_convertToTimeseries(t *testing.T) {
 	}, {
 		name: "untyped",
 		in: &PartitionedMetrics{
-			ClusterID: "foo",
 			Families: []*clientmodel.MetricFamily{{
 				Name: &fooMetricName,
 				Help: &fooHelp,
