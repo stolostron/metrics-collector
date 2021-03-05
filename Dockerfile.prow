@@ -5,6 +5,7 @@ FROM openshift/origin-release:golang-1.13 AS builder
 ENV GOFLAGS="-mod=vendor"
 COPY . /go/src/github.com/open-cluster-management/metrics-collector
 RUN cd /go/src/github.com/open-cluster-management/metrics-collector && \
+    go mod vendor && go mod tidy && go mod verify && \
     go build ./cmd/metrics-collector
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
