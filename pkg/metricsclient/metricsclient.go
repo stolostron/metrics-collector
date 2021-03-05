@@ -1,3 +1,5 @@
+// Copyright Contributors to the Open Cluster Management project
+
 package metricsclient
 
 import (
@@ -264,9 +266,9 @@ func MTLSTransport(logger log.Logger) (*http.Transport, error) {
 	tlsKeyFile := "/tlscerts/tls.key"
 	tlsCrtFile := "/tlscerts/tls.crt"
 	if testMode {
-		caCertFile = "./tlscerts/ca.crt"
-		tlsKeyFile = "./tlscerts/tls.key"
-		tlsCrtFile = "./tlscerts/tls.crt"
+		caCertFile = "./testdata/ca.crt"
+		tlsKeyFile = "./testdata/tls.key"
+		tlsCrtFile = "./testdata/tls.crt"
 	}
 	// Load Server CA cert
 	caCert, err := ioutil.ReadFile(caCertFile)
