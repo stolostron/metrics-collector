@@ -1,0 +1,23 @@
+# Copyright Contributors to the Open Cluster Management project
+
+-include /opt/build-harness/Makefile.prow
+
+PKGS=$(shell go list ./... | grep -v '/vendor/|/test/(?!e2e)')
+
+copyright-check:
+	./cicd-scripts/copyright-check.sh $(TRAVIS_BRANCH)
+
+test-unit:
+	@echo "TODO: Run unit-tests"
+	go test -race -short $(PKGS) -count=1 -coverprofile cover.out
+
+e2e-tests:
+	@echo "TODO: Run e2e-tests"
+
+build:
+	go build ./cmd/metrics-collector
+
+vendor:
+	go mod vendor
+	go mod tidy
+	go mod verify
