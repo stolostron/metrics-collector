@@ -4,10 +4,12 @@
 
 PKGS=$(shell go list ./... | grep -v '/vendor/|/test/(?!e2e)')
 
+.PHONY: copyright-check test-unit e2e-test2 build vendor
+
 copyright-check:
 	./cicd-scripts/copyright-check.sh $(TRAVIS_BRANCH)
 
-test-unit:
+test-unit: vendor
 	@echo "TODO: Run unit-tests"
 	go test -race -short $(PKGS) -count=1 -coverprofile cover.out
 
