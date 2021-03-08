@@ -46,6 +46,7 @@ stages:
 before_script:
   # Bootstrap the build harness.
   - make init
+  - git config --global credential.helper store
   - echo "https://${GITHUB_TOKEN}:x-oauth-basic@github.com" >> ~/.git-credentials
   # Set the image tag differently for PRs.
   - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
