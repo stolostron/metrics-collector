@@ -158,7 +158,7 @@ func (vec Vector) ContainsSameLabelset() bool {
 	return false
 }
 
-// Matrix is a slice of Series that implements sort.Interface and
+// Matrix is a slice of Seriess that implements sort.Interface and
 // has a String method.
 type Matrix []Series
 
@@ -263,7 +263,7 @@ type StorageSeries struct {
 	series Series
 }
 
-// NewStorageSeries returns a StorageSeries from a Series.
+// NewStorageSeries returns a StorageSeries fromfor series.
 func NewStorageSeries(series Series) *StorageSeries {
 	return &StorageSeries{
 		series: series,

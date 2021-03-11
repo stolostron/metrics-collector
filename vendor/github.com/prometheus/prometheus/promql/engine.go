@@ -76,8 +76,6 @@ func GetDefaultEvaluationInterval() int64 {
 type engineMetrics struct {
 	currentQueries       prometheus.Gauge
 	maxConcurrentQueries prometheus.Gauge
-	queryLogEnabled      prometheus.Gauge
-	queryLogFailures     prometheus.Counter
 	queryQueueTime       prometheus.Summary
 	queryPrepareTime     prometheus.Summary
 	queryInnerEval       prometheus.Summary
@@ -114,13 +112,6 @@ func (e ErrStorage) Error() string {
 	return e.Err.Error()
 }
 
-// QueryLogger is an interface that can be used to log all the queries logged
-// by the engine.
-type QueryLogger interface {
-	Log(...interface{}) error
-	Close() error
-}
-
 // A Query is derived from an a raw query string and can be run against an engine
 // it is associated with.
 type Query interface {
@@ -155,10 +146,6 @@ type query struct {
 	ng *Engine
 }
 
-type queryCtx int
-
-var queryOrigin queryCtx
-
 // Statement implements the Query interface.
 func (q *query) Statement() Statement {
 	return q.stmt
@@ -189,15 +176,7 @@ func (q *query) Exec(ctx context.Context) *Result {
 		span.SetTag(queryTag, q.stmt.String())
 	}
 
-	// Log query in active log.
-	if q.ng.activeQueryTracker != nil {
-		queryIndex := q.ng.activeQueryTracker.Insert(q.q)
-		defer q.ng.activeQueryTracker.Delete(queryIndex)
-	}
-
-	// Exec query.
 	res, warnings, err := q.ng.exec(ctx, q)
-
 	return &Result{Err: err, Value: res, Warnings: warnings}
 }
 
@@ -222,12 +201,11 @@ func contextErr(err error, env string) error {
 
 // EngineOpts contains configuration options used when creating a new Engine.
 type EngineOpts struct {
-	Logger             log.Logger
-	Reg                prometheus.Registerer
-	MaxConcurrent      int
-	MaxSamples         int
-	Timeout            time.Duration
-	ActiveQueryTracker *ActiveQueryTracker
+	Logger        log.Logger
+	Reg           prometheus.Registerer
+	MaxConcurrent int
+	MaxSamples    int
+	Timeout       time.Duration
 }
 
 // Engine handles the lifetime of queries from beginning to end.
@@ -238,9 +216,6 @@ type Engine struct {
 	timeout            time.Duration
 	gate               *gate.Gate
 	maxSamplesPerQuery int
-	activeQueryTracker *ActiveQueryTracker
-	queryLogger        QueryLogger
-	queryLoggerLock    sync.RWMutex
 }
 
 // NewEngine returns a new engine.
@@ -256,18 +231,6 @@ func NewEngine(opts EngineOpts) *Engine {
 			Name:      "queries",
 			Help:      "The current number of queries being executed or waiting.",
 		}),
-		queryLogEnabled: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "query_log_enabled",
-			Help:      "State of the query log.",
-		}),
-		queryLogFailures: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "query_log_failures_total",
-			Help:      "The number of query log failures.",
-		}),
 		maxConcurrentQueries: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
@@ -280,7 +243,6 @@ func NewEngine(opts EngineOpts) *Engine {
 			Name:        "query_duration_seconds",
 			Help:        "Query timings",
 			ConstLabels: prometheus.Labels{"slice": "queue_time"},
-			Objectives:  map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		}),
 		queryPrepareTime: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace:   namespace,
@@ -288,7 +250,6 @@ func NewEngine(opts EngineOpts) *Engine {
 			Name:        "query_duration_seconds",
 			Help:        "Query timings",
 			ConstLabels: prometheus.Labels{"slice": "prepare_time"},
-			Objectives:  map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		}),
 		queryInnerEval: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace:   namespace,
@@ -296,7 +257,6 @@ func NewEngine(opts EngineOpts) *Engine {
 			Name:        "query_duration_seconds",
 			Help:        "Query timings",
 			ConstLabels: prometheus.Labels{"slice": "inner_eval"},
-			Objectives:  map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		}),
 		queryResultSort: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace:   namespace,
@@ -304,7 +264,6 @@ func NewEngine(opts EngineOpts) *Engine {
 			Name:        "query_duration_seconds",
 			Help:        "Query timings",
 			ConstLabels: prometheus.Labels{"slice": "result_sort"},
-			Objectives:  map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		}),
 	}
 	metrics.maxConcurrentQueries.Set(float64(opts.MaxConcurrent))
@@ -313,45 +272,18 @@ func NewEngine(opts EngineOpts) *Engine {
 		opts.Reg.MustRegister(
 			metrics.currentQueries,
 			metrics.maxConcurrentQueries,
-			metrics.queryLogEnabled,
-			metrics.queryLogFailures,
 			metrics.queryQueueTime,
 			metrics.queryPrepareTime,
 			metrics.queryInnerEval,
 			metrics.queryResultSort,
 		)
 	}
-
 	return &Engine{
 		gate:               gate.New(opts.MaxConcurrent),
 		timeout:            opts.Timeout,
 		logger:             opts.Logger,
 		metrics:            metrics,
 		maxSamplesPerQuery: opts.MaxSamples,
-		activeQueryTracker: opts.ActiveQueryTracker,
-	}
-}
-
-// SetQueryLogger sets the query logger.
-func (ng *Engine) SetQueryLogger(l QueryLogger) {
-	ng.queryLoggerLock.Lock()
-	defer ng.queryLoggerLock.Unlock()
-
-	if ng.queryLogger != nil {
-		// An error closing the old file descriptor should
-		// not make reload fail; only log a warning.
-		err := ng.queryLogger.Close()
-		if err != nil {
-			level.Warn(ng.logger).Log("msg", "error while closing the previous query log file", "err", err)
-		}
-	}
-
-	ng.queryLogger = l
-
-	if l != nil {
-		ng.metrics.queryLogEnabled.Set(1)
-	} else {
-		ng.metrics.queryLogEnabled.Set(0)
 	}
 }
 
@@ -420,40 +352,12 @@ func (ng *Engine) newTestQuery(f func(context.Context) error) Query {
 //
 // At this point per query only one EvalStmt is evaluated. Alert and record
 // statements are not handled by the Engine.
-func (ng *Engine) exec(ctx context.Context, q *query) (v Value, w storage.Warnings, err error) {
+func (ng *Engine) exec(ctx context.Context, q *query) (Value, storage.Warnings, error) {
 	ng.metrics.currentQueries.Inc()
 	defer ng.metrics.currentQueries.Dec()
 
 	ctx, cancel := context.WithTimeout(ctx, ng.timeout)
 	q.cancel = cancel
-
-	defer func() {
-		ng.queryLoggerLock.RLock()
-		if l := ng.queryLogger; l != nil {
-			f := []interface{}{"query", q.q}
-			if err != nil {
-				f = append(f, "error", err)
-			}
-			if eq, ok := q.Statement().(*EvalStmt); ok {
-				f = append(f,
-					"start", formatDate(eq.Start),
-					"end", formatDate(eq.End),
-					"step", eq.Interval.String(),
-				)
-			}
-			f = append(f, "stats", stats.NewQueryStats(q.Stats()))
-			if origin := ctx.Value(queryOrigin); origin != nil {
-				for k, v := range origin.(map[string]string) {
-					f = append(f, k, v)
-				}
-			}
-			if err := l.Log(f...); err != nil {
-				ng.metrics.queryLogFailures.Inc()
-				level.Error(ng.logger).Log("msg", "can't log query", "err", err)
-			}
-		}
-		ng.queryLoggerLock.RUnlock()
-	}()
 
 	execSpanTimer, ctx := q.stats.GetSpanTimer(ctx, stats.ExecTotalTime)
 	defer execSpanTimer.Finish()
@@ -650,7 +554,7 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 
 		// We need to make sure we select the timerange selected by the subquery.
 		// TODO(gouthamve): cumulativeSubqueryOffset gives the sum of range and the offset
-		// we can optimise it by separating out the range and offsets, and subtracting the offsets
+		// we can optimise it by separating out the range and offsets, and substracting the offsets
 		// from end also.
 		subqOffset := ng.cumulativeSubqueryOffset(path)
 		offsetMilliseconds := durationMilliseconds(subqOffset)
@@ -660,7 +564,6 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 		case *VectorSelector:
 			params.Start = params.Start - durationMilliseconds(LookbackDelta)
 			params.Func = extractFuncFromPath(path)
-			params.By, params.Grouping = extractGroupsFromPath(path)
 			if n.Offset > 0 {
 				offsetMilliseconds := durationMilliseconds(n.Offset)
 				params.Start = params.Start - offsetMilliseconds
@@ -677,7 +580,6 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 
 		case *MatrixSelector:
 			params.Func = extractFuncFromPath(path)
-			params.Range = durationMilliseconds(n.Range)
 			// For all matrix queries we want to ensure that we have (end-start) + range selected
 			// this way we have `range` data before the start time
 			params.Start = params.Start - durationMilliseconds(n.Range)
@@ -717,18 +619,6 @@ func extractFuncFromPath(p []Node) string {
 		return ""
 	}
 	return extractFuncFromPath(p[:len(p)-1])
-}
-
-// extractGroupsFromPath parses vector outer function and extracts grouping information if by or without was used.
-func extractGroupsFromPath(p []Node) (bool, []string) {
-	if len(p) == 0 {
-		return false, nil
-	}
-	switch n := p[len(p)-1].(type) {
-	case *AggregateExpr:
-		return !n.Without, n.Grouping
-	}
-	return false, nil
 }
 
 func checkForSeriesSetExpansion(ctx context.Context, expr Expr) {
@@ -1146,55 +1036,13 @@ func (ev *evaluator) eval(expr Expr) Value {
 				} else {
 					ev.error(ErrTooManySamples(env))
 				}
-			} else {
-				putPointSlice(ss.Points)
 			}
 		}
-
-		putPointSlice(points)
-
-		// The absent_over_time function returns 0 or 1 series. So far, the matrix
-		// contains multiple series. The following code will create a new series
-		// with values of 1 for the timestamps where no series has value.
-		if e.Func.Name == "absent_over_time" {
-			steps := int(1 + (ev.endTimestamp-ev.startTimestamp)/ev.interval)
-			// Iterate once to look for a complete series.
-			for _, s := range mat {
-				if len(s.Points) == steps {
-					return Matrix{}
-				}
-			}
-
-			found := map[int64]struct{}{}
-
-			for i, s := range mat {
-				for _, p := range s.Points {
-					found[p.T] = struct{}{}
-				}
-				if i > 0 && len(found) == steps {
-					return Matrix{}
-				}
-			}
-
-			newp := make([]Point, 0, steps-len(found))
-			for ts := ev.startTimestamp; ts <= ev.endTimestamp; ts += ev.interval {
-				if _, ok := found[ts]; !ok {
-					newp = append(newp, Point{T: ts, V: 1})
-				}
-			}
-
-			return Matrix{
-				Series{
-					Metric: createLabelsForAbsentFunction(e.Args[0]),
-					Points: newp,
-				},
-			}
-		}
-
 		if mat.ContainsSameLabelset() {
 			ev.errorf("vector cannot contain metrics with the same labelset")
 		}
 
+		putPointSlice(points)
 		return mat
 
 	case *ParenExpr:
@@ -1202,7 +1050,7 @@ func (ev *evaluator) eval(expr Expr) Value {
 
 	case *UnaryExpr:
 		mat := ev.eval(e.Expr).(Matrix)
-		if e.Op == SUB {
+		if e.Op == ItemSUB {
 			for i := range mat {
 				mat[i].Metric = dropMetricName(mat[i].Metric)
 				for j := range mat[i].Points {
@@ -1224,15 +1072,15 @@ func (ev *evaluator) eval(expr Expr) Value {
 			}, e.LHS, e.RHS)
 		case lt == ValueTypeVector && rt == ValueTypeVector:
 			switch e.Op {
-			case LAND:
+			case ItemLAND:
 				return ev.rangeEval(func(v []Value, enh *EvalNodeHelper) Vector {
 					return ev.VectorAnd(v[0].(Vector), v[1].(Vector), e.VectorMatching, enh)
 				}, e.LHS, e.RHS)
-			case LOR:
+			case ItemLOR:
 				return ev.rangeEval(func(v []Value, enh *EvalNodeHelper) Vector {
 					return ev.VectorOr(v[0].(Vector), v[1].(Vector), e.VectorMatching, enh)
 				}, e.LHS, e.RHS)
-			case LUNLESS:
+			case ItemLUnless:
 				return ev.rangeEval(func(v []Value, enh *EvalNodeHelper) Vector {
 					return ev.VectorUnless(v[0].(Vector), v[1].(Vector), e.VectorMatching, enh)
 				}, e.LHS, e.RHS)
@@ -1283,8 +1131,6 @@ func (ev *evaluator) eval(expr Expr) Value {
 
 			if len(ss.Points) > 0 {
 				mat = append(mat, ss)
-			} else {
-				putPointSlice(ss.Points)
 			}
 
 		}
@@ -1673,17 +1519,13 @@ func (ev *evaluator) VectorBinop(op ItemType, lhs, rhs Vector, matching *VectorM
 // signatureFunc returns a function that calculates the signature for a metric
 // ignoring the provided labels. If on, then the given labels are only used instead.
 func signatureFunc(on bool, names ...string) func(labels.Labels) uint64 {
-	sort.Strings(names)
+	// TODO(fabxc): ensure names are sorted and then use that and sortedness
+	// of labels by names to speed up the operations below.
+	// Alternatively, inline the hashing and don't build new label sets.
 	if on {
-		return func(lset labels.Labels) uint64 {
-			h, _ := lset.HashForLabels(make([]byte, 0, 1024), names...)
-			return h
-		}
+		return func(lset labels.Labels) uint64 { return lset.HashForLabels(names...) }
 	}
-	return func(lset labels.Labels) uint64 {
-		h, _ := lset.HashWithoutLabels(make([]byte, 0, 1024), names...)
-		return h
-	}
+	return func(lset labels.Labels) uint64 { return lset.HashWithoutLabels(names...) }
 }
 
 // resultMetric returns the metric for the given sample(s) based on the Vector
@@ -1778,29 +1620,29 @@ func dropMetricName(l labels.Labels) labels.Labels {
 // scalarBinop evaluates a binary operation between two Scalars.
 func scalarBinop(op ItemType, lhs, rhs float64) float64 {
 	switch op {
-	case ADD:
+	case ItemADD:
 		return lhs + rhs
-	case SUB:
+	case ItemSUB:
 		return lhs - rhs
-	case MUL:
+	case ItemMUL:
 		return lhs * rhs
-	case DIV:
+	case ItemDIV:
 		return lhs / rhs
-	case POW:
+	case ItemPOW:
 		return math.Pow(lhs, rhs)
-	case MOD:
+	case ItemMOD:
 		return math.Mod(lhs, rhs)
-	case EQL:
+	case ItemEQL:
 		return btos(lhs == rhs)
-	case NEQ:
+	case ItemNEQ:
 		return btos(lhs != rhs)
-	case GTR:
+	case ItemGTR:
 		return btos(lhs > rhs)
-	case LSS:
+	case ItemLSS:
 		return btos(lhs < rhs)
-	case GTE:
+	case ItemGTE:
 		return btos(lhs >= rhs)
-	case LTE:
+	case ItemLTE:
 		return btos(lhs <= rhs)
 	}
 	panic(errors.Errorf("operator %q not allowed for Scalar operations", op))
@@ -1809,29 +1651,29 @@ func scalarBinop(op ItemType, lhs, rhs float64) float64 {
 // vectorElemBinop evaluates a binary operation between two Vector elements.
 func vectorElemBinop(op ItemType, lhs, rhs float64) (float64, bool) {
 	switch op {
-	case ADD:
+	case ItemADD:
 		return lhs + rhs, true
-	case SUB:
+	case ItemSUB:
 		return lhs - rhs, true
-	case MUL:
+	case ItemMUL:
 		return lhs * rhs, true
-	case DIV:
+	case ItemDIV:
 		return lhs / rhs, true
-	case POW:
+	case ItemPOW:
 		return math.Pow(lhs, rhs), true
-	case MOD:
+	case ItemMOD:
 		return math.Mod(lhs, rhs), true
-	case EQL:
+	case ItemEQL:
 		return lhs, lhs == rhs
-	case NEQ:
+	case ItemNEQ:
 		return lhs, lhs != rhs
-	case GTR:
+	case ItemGTR:
 		return lhs, lhs > rhs
-	case LSS:
+	case ItemLSS:
 		return lhs, lhs < rhs
-	case GTE:
+	case ItemGTE:
 		return lhs, lhs >= rhs
-	case LTE:
+	case ItemLTE:
 		return lhs, lhs <= rhs
 	}
 	panic(errors.Errorf("operator %q not allowed for operations between Vectors", op))
@@ -1851,7 +1693,7 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 
 	result := map[uint64]*groupedAggregation{}
 	var k int64
-	if op == TOPK || op == BOTTOMK {
+	if op == ItemTopK || op == ItemBottomK {
 		f := param.(float64)
 		if !convertibleToInt64(f) {
 			ev.errorf("Scalar value %v overflows int64", f)
@@ -1862,11 +1704,11 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 		}
 	}
 	var q float64
-	if op == QUANTILE {
+	if op == ItemQuantile {
 		q = param.(float64)
 	}
 	var valueLabel string
-	if op == COUNT_VALUES {
+	if op == ItemCountValues {
 		valueLabel = param.(string)
 		if !model.LabelName(valueLabel).IsValid() {
 			ev.errorf("invalid label name %q", valueLabel)
@@ -1876,14 +1718,11 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 		}
 	}
 
-	sort.Strings(grouping)
-	lb := labels.NewBuilder(nil)
-	buf := make([]byte, 0, 1024)
 	for _, s := range vec {
 		metric := s.Metric
 
-		if op == COUNT_VALUES {
-			lb.Reset(metric)
+		if op == ItemCountValues {
+			lb := labels.NewBuilder(metric)
 			lb.Set(valueLabel, strconv.FormatFloat(s.V, 'f', -1, 64))
 			metric = lb.Labels()
 		}
@@ -1892,9 +1731,9 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 			groupingKey uint64
 		)
 		if without {
-			groupingKey, buf = metric.HashWithoutLabels(buf, grouping...)
+			groupingKey = metric.HashWithoutLabels(grouping...)
 		} else {
-			groupingKey, buf = metric.HashForLabels(buf, grouping...)
+			groupingKey = metric.HashForLabels(grouping...)
 		}
 
 		group, ok := result[groupingKey]
@@ -1903,7 +1742,7 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 			var m labels.Labels
 
 			if without {
-				lb.Reset(metric)
+				lb := labels.NewBuilder(metric)
 				lb.Del(grouping...)
 				lb.Del(labels.MetricName)
 				m = lb.Labels()
@@ -1930,15 +1769,15 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 			if k > inputVecLen {
 				resultSize = inputVecLen
 			}
-			if op == STDVAR || op == STDDEV {
+			if op == ItemStdvar || op == ItemStddev {
 				result[groupingKey].value = 0.0
-			} else if op == TOPK || op == QUANTILE {
+			} else if op == ItemTopK || op == ItemQuantile {
 				result[groupingKey].heap = make(vectorByValueHeap, 0, resultSize)
 				heap.Push(&result[groupingKey].heap, &Sample{
 					Point:  Point{V: s.V},
 					Metric: s.Metric,
 				})
-			} else if op == BOTTOMK {
+			} else if op == ItemBottomK {
 				result[groupingKey].reverseHeap = make(vectorByReverseValueHeap, 0, resultSize)
 				heap.Push(&result[groupingKey].reverseHeap, &Sample{
 					Point:  Point{V: s.V},
@@ -1949,33 +1788,33 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 		}
 
 		switch op {
-		case SUM:
+		case ItemSum:
 			group.value += s.V
 
-		case AVG:
+		case ItemAvg:
 			group.groupCount++
 			group.mean += (s.V - group.mean) / float64(group.groupCount)
 
-		case MAX:
+		case ItemMax:
 			if group.value < s.V || math.IsNaN(group.value) {
 				group.value = s.V
 			}
 
-		case MIN:
+		case ItemMin:
 			if group.value > s.V || math.IsNaN(group.value) {
 				group.value = s.V
 			}
 
-		case COUNT, COUNT_VALUES:
+		case ItemCount, ItemCountValues:
 			group.groupCount++
 
-		case STDVAR, STDDEV:
+		case ItemStdvar, ItemStddev:
 			group.groupCount++
 			delta := s.V - group.mean
 			group.mean += delta / float64(group.groupCount)
 			group.value += delta * (s.V - group.mean)
 
-		case TOPK:
+		case ItemTopK:
 			if int64(len(group.heap)) < k || group.heap[0].V < s.V || math.IsNaN(group.heap[0].V) {
 				if int64(len(group.heap)) == k {
 					heap.Pop(&group.heap)
@@ -1986,7 +1825,7 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 				})
 			}
 
-		case BOTTOMK:
+		case ItemBottomK:
 			if int64(len(group.reverseHeap)) < k || group.reverseHeap[0].V > s.V || math.IsNaN(group.reverseHeap[0].V) {
 				if int64(len(group.reverseHeap)) == k {
 					heap.Pop(&group.reverseHeap)
@@ -1997,7 +1836,7 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 				})
 			}
 
-		case QUANTILE:
+		case ItemQuantile:
 			group.heap = append(group.heap, s)
 
 		default:
@@ -2008,19 +1847,19 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 	// Construct the result Vector from the aggregated groups.
 	for _, aggr := range result {
 		switch op {
-		case AVG:
+		case ItemAvg:
 			aggr.value = aggr.mean
 
-		case COUNT, COUNT_VALUES:
+		case ItemCount, ItemCountValues:
 			aggr.value = float64(aggr.groupCount)
 
-		case STDVAR:
+		case ItemStdvar:
 			aggr.value = aggr.value / float64(aggr.groupCount)
 
-		case STDDEV:
+		case ItemStddev:
 			aggr.value = math.Sqrt(aggr.value / float64(aggr.groupCount))
 
-		case TOPK:
+		case ItemTopK:
 			// The heap keeps the lowest value on top, so reverse it.
 			sort.Sort(sort.Reverse(aggr.heap))
 			for _, v := range aggr.heap {
@@ -2031,7 +1870,7 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 			}
 			continue // Bypass default append.
 
-		case BOTTOMK:
+		case ItemBottomK:
 			// The heap keeps the lowest value on top, so reverse it.
 			sort.Sort(sort.Reverse(aggr.reverseHeap))
 			for _, v := range aggr.reverseHeap {
@@ -2042,7 +1881,7 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 			}
 			continue // Bypass default append.
 
-		case QUANTILE:
+		case ItemQuantile:
 			aggr.value = quantile(q, aggr.heap)
 
 		default:
@@ -2069,16 +1908,11 @@ func btos(b bool) float64 {
 // result of the op operation.
 func shouldDropMetricName(op ItemType) bool {
 	switch op {
-	case ADD, SUB, DIV, MUL, POW, MOD:
+	case ItemADD, ItemSUB, ItemDIV, ItemMUL, ItemPOW, ItemMOD:
 		return true
 	default:
 		return false
 	}
-}
-
-// NewOriginContext returns a new context with data about the origin attached.
-func NewOriginContext(ctx context.Context, data map[string]string) context.Context {
-	return context.WithValue(ctx, queryOrigin, data)
 }
 
 // documentedType returns the internal type to the equivalent
@@ -2092,8 +1926,4 @@ func documentedType(t ValueType) string {
 	default:
 		return string(t)
 	}
-}
-
-func formatDate(t time.Time) string {
-	return t.UTC().Format("2006-01-02T15:04:05.000Z07:00")
 }
