@@ -55,10 +55,10 @@ type Querier interface {
 	Select(*SelectParams, ...*labels.Matcher) (SeriesSet, Warnings, error)
 
 	// LabelValues returns all potential values for a label name.
-	LabelValues(name string) ([]string, Warnings, error)
+	LabelValues(name string) ([]string, error)
 
 	// LabelNames returns all the unique label names present in the block in sorted order.
-	LabelNames() ([]string, Warnings, error)
+	LabelNames() ([]string, error)
 
 	// Close releases the resources of the Querier.
 	Close() error
@@ -71,10 +71,6 @@ type SelectParams struct {
 
 	Step int64  // Query step size in milliseconds.
 	Func string // String representation of surrounding function or aggregation.
-
-	Grouping []string // List of label names used in aggregation.
-	By       bool     // Indicate whether it is without or by.
-	Range    int64    // Range vector selector range in milliseconds.
 }
 
 // QueryableFunc is an adapter to allow the use of ordinary functions as

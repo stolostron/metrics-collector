@@ -36,4 +36,7 @@ require (
 	gopkg.in/square/go-jose.v2 v2.0.0-20180411045311-89060dee6a84
 )
 
-replace k8s.io/client-go => k8s.io/client-go v0.0.0-20191016111102-bec269661e48
+replace (
+	golang.org/x/text => golang.org/x/text v0.3.5
+	k8s.io/client-go => k8s.io/client-go v0.0.0-20191016111102-bec269661e48
+)
