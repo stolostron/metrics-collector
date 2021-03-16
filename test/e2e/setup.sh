@@ -92,7 +92,7 @@ deploy_observatorium() {
 	echo "Current directory"
 	echo $(pwd)
 
-	echo -n "Create namespace open-cluster-management-monitoring: " && kubectl create namespace open-cluster-management-monitoring
+	echo -n "Create namespace open-cluster-management-observability: " && kubectl create namespace open-cluster-management-observability
 	echo "Apply observatorium yamls" 
 	echo -n "Apply client ca cert and server certs: " && kubectl apply -f ./metrics-collector/temp/observatorium-ca-cert.yaml
 	echo -n "Apply secret with tenant yaml : " && kubectl apply -f ./metrics-collector/temp/observatorium-api-secret.yaml
@@ -146,7 +146,7 @@ deploy_prometheus_operator() {
 
 deploy_metrics_collector() {
 	echo "=====Deploying metrics-collector====="
-	echo -n "Switch to namespace: " && kubectl config set-context --current --namespace open-cluster-management-monitoring
+	echo -n "Switch to namespace: " && kubectl config set-context --current --namespace open-cluster-management-observability
 
 	echo "Current directory"
 	echo $(pwd)
@@ -169,7 +169,7 @@ deploy_metrics_collector() {
 
     echo -n "available pods: " && kubectl get pods --all-namespaces
 	echo "Waiting 3 minutes for the pod to set up and send data... " && sleep 180
-	POD=$(kubectl get pod -l k8s-app=metrics-collector -n open-cluster-management-monitoring -o jsonpath="{.items[0].metadata.name}")
+	POD=$(kubectl get pod -l k8s-app=metrics-collector -n open-cluster-management-observability -o jsonpath="{.items[0].metadata.name}")
 	echo "Monitoring pod logs" 
 	count=0
 	

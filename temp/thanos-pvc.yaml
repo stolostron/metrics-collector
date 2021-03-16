@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/part-of: observatorium
     controller.receive.thanos.io/hashring: default
   name: data-observability-observatorium-thanos-receive-default-0
-  namespace: open-cluster-management-monitoring
+  namespace: open-cluster-management-observability
 spec:
   accessModes:
   - ReadWriteOnce
