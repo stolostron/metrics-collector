@@ -2,8 +2,12 @@
 # Copyright (c) 2021 Red Hat, Inc.
 # Copyright Contributors to the Open Cluster Management project
 
+if [ "$#" -ne 1 ] ; then
+  echo "Usage: $0 IMAGE" >&2
+  exit 1
+fi
+
 echo "=====running kind exploration=====" 
-echo $1
 
 IMAGE_NAME=$1
 echo "IMAGE: " $IMAGE_NAME
@@ -18,25 +22,18 @@ if [[ "$(uname)" == "Darwin" ]]; then
 fi
 
 deploy() {
-    setup_kubectl_and_oc_command
+    #setup_kubectl_command
 	create_kind_hub
 	deploy_prometheus_operator
 	deploy_observatorium
 	deploy_thanos
-	deploy_metrics_collector $IMAGE_NAME
-	#install_monitoring_operator
-	delete_kind_hub	
-	#delete_command_binaries	
+	deploy_metrics_collector $IMAGE_NAME	
 }
 
-setup_kubectl_and_oc_command() {
-	echo "=====Setup kubectl and oc=====" 
+setup_kubectl_command() {
+	echo "=====Setup kubectl=====" 
 	# kubectl required for kind
-	# oc client required for installing operators
-	# if and when we are feeling ambitious... also download the installer and install ocp, and run our component integration test here	
-	# uname -a and grep mac or something...
-    # Darwin MacBook-Pro 19.5.0 Darwin Kernel Version 19.5.0: Tue May 26 20:41:44 PDT 2020; root:xnu-6153.121.2~2/RELEASE_X86_64 x86_64
-	echo "Install kubectl and oc from openshift mirror (https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.4.14/openshift-client-mac-4.4.14.tar.gz)" 
+	echo "Install kubectl from openshift mirror (https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.4.14/openshift-client-mac-4.4.14.tar.gz)" 
 	mv README.md README.md.tmp 
     if [[ "$(uname)" == "Darwin" ]]; then # then we are on a Mac 
 		curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.4.14/openshift-client-mac-4.4.14.tar.gz 
@@ -56,35 +53,18 @@ setup_kubectl_and_oc_command() {
 	if [[ ! -f /usr/local/bin/kubectl ]]; then
 		sudo cp ./kubectl /usr/local/bin/kubectl
 	fi
-	chmod +x ./oc
-	if [[ ! -f /usr/local/bin/oc ]]; then
-		sudo cp ./oc /usr/local/bin/oc
-	fi
-	# kubectl and oc are now installed in current dir 
+	# kubectl are now installed in current dir 
 	echo -n "kubectl version" && kubectl version
- 	# echo -n "oc version" && oc version 
 }
  
 create_kind_hub() { 
     WORKDIR=`pwd`
-    if [[ ! -f /usr/local/bin/kind ]]; then
-    
-    	echo "=====Create kind cluster=====" 
-    	echo "Install kind from (https://kind.sigs.k8s.io/)."
-    
-    	# uname returns your operating system name
-    	# uname -- Print operating system name
-    	# -L location, lowercase -o specify output name, uppercase -O Write  output to a local file named like the remote file we get  
-    	curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.7.0/kind-$(uname)-amd64"
-    	chmod +x ./kind
-    	sudo cp ./kind /usr/local/bin/kind
-    fi
     echo "Delete hub if it exists"
     kind delete cluster --name hub || true
     
     echo "Start hub cluster" 
     rm -rf $HOME/.kube/kind-config-hub
-    kind create cluster --kubeconfig $HOME/.kube/kind-config-hub --name hub --config ${WORKDIR}/test/e2e/kind/kind-hub.config.yaml
+    kind create cluster --kubeconfig $HOME/.kube/kind-config-hub --name hub --config ${WORKDIR}/test/integration/kind/kind-hub.config.yaml
     # kubectl cluster-info --context kind-hub --kubeconfig $(pwd)/.kube/kind-config-hub # confirm connection 
     export KUBECONFIG=$HOME/.kube/kind-config-hub
 } 
@@ -95,18 +75,18 @@ deploy_observatorium() {
 
 	echo -n "Create namespace open-cluster-management-observability: " && kubectl create namespace open-cluster-management-observability
 	echo "Apply observatorium yamls" 
-	echo -n "Apply client ca cert and server certs: " && kubectl apply -f ./metrics-collector/test/e2e/manifests/observatorium-ca-cert.yaml
-	echo -n "Apply secret with tenant yaml : " && kubectl apply -f ./metrics-collector/test/e2e/manifests/observatorium-api-secret.yaml
-	echo -n "Apply configmap with rbac yaml : " && kubectl apply -f ./metrics-collector/test/e2e/manifests/observatorium-api-configmap.yaml
-	echo -n "Apply Deployment yaml : " && kubectl apply -f ./metrics-collector/test/e2e/manifests/observatorium-api.yaml
-	echo -n "Apply Service yaml : " && kubectl apply -f ./metrics-collector/test/e2e/manifests/observatorium-api-service.yaml
+	echo -n "Apply client ca cert and server certs: " && kubectl apply -f ./metrics-collector/test/integration/manifests/observatorium-ca-cert.yaml
+	echo -n "Apply secret with tenant yaml : " && kubectl apply -f ./metrics-collector/test/integration/manifests/observatorium-api-secret.yaml
+	echo -n "Apply configmap with rbac yaml : " && kubectl apply -f ./metrics-collector/test/integration/manifests/observatorium-api-configmap.yaml
+	echo -n "Apply Deployment yaml : " && kubectl apply -f ./metrics-collector/test/integration/manifests/observatorium-api.yaml
+	echo -n "Apply Service yaml : " && kubectl apply -f ./metrics-collector/test/integration/manifests/observatorium-api-service.yaml
 }
 deploy_thanos() {
 	echo "=====Setting up thanos in kind cluster=====" 
-	echo -n "Apply create pvc yaml : " && kubectl apply -f ./metrics-collector/test/e2e/manifests/thanos-pvc.yaml
-	echo -n "Apply configmap with hashring yaml : " && kubectl apply -f ./metrics-collector/test/e2e/manifests/thanos-configmap.yaml
-	echo -n "Apply Deployment yaml : " && kubectl apply -f ./metrics-collector/test/e2e/manifests/thanos-api.yaml
-	echo -n "Apply Service yaml : " && kubectl apply -f ./metrics-collector/test/e2e/manifests/thanos-service.yaml
+	echo -n "Apply create pvc yaml : " && kubectl apply -f ./metrics-collector/test/integration/manifests/thanos-pvc.yaml
+	echo -n "Apply configmap with hashring yaml : " && kubectl apply -f ./metrics-collector/test/integration/manifests/thanos-configmap.yaml
+	echo -n "Apply Deployment yaml : " && kubectl apply -f ./metrics-collector/test/integration/manifests/thanos-api.yaml
+	echo -n "Apply Service yaml : " && kubectl apply -f ./metrics-collector/test/integration/manifests/thanos-service.yaml
 	echo "Waiting 2 minutes for observatorium and thanos to start... " && sleep 120
 }
 
@@ -158,15 +138,17 @@ deploy_metrics_collector() {
 	
 	# apply yamls 
 	echo "Apply hub yamls" 
-	echo -n "Apply client-serving-certs-ca-bundle: " && kubectl apply -f ./test/e2e/manifests/client-serving-certs-ca-bundle.yaml
-	echo -n "Apply rolebinding: " && kubectl apply -f ./test/e2e/manifests/rolebinding.yaml
-	echo -n "Apply client secret: " && kubectl apply -f ./test/e2e/manifests/client_secret.yaml
-	echo -n "Apply mtls certs: " && kubectl apply -f ./test/e2e/manifests/metrics-collector-cert.yaml
-	$sed_command "s~{{ METRICS_COLLECTOR_IMAGE }}~$1~g" ./test/e2e/manifests/deployment_e2e.yaml
-    $sed_command "s~cluster=func_e2e_test_travis~cluster=func_e2e_test_travis-$1~g" ./test/e2e/manifests/deployment_e2e.yaml
+	echo -n "Apply client-serving-certs-ca-bundle: " && kubectl apply -f ./test/integration/manifests/client-serving-certs-ca-bundle.yaml
+	echo -n "Apply rolebinding: " && kubectl apply -f ./test/integration/manifests/rolebinding.yaml
+	echo -n "Apply client secret: " && kubectl apply -f ./test/integration/manifests/client_secret.yaml
+	echo -n "Apply mtls certs: " && kubectl apply -f ./test/integration/manifests/metrics-collector-cert.yaml
+	cp ./test/integration/manifests/deployment.yaml ./test/integration/manifests/deployment_update.yaml
+	$sed_command "s~{{ METRICS_COLLECTOR_IMAGE }}~$1~g" ./test/integration/manifests/deployment_update.yaml
+    $sed_command "s~cluster=func_e2e_test_travis~cluster=func_e2e_test_travis-$1~g" ./test/integration/manifests/deployment_update.yaml
 	echo "Display deployment yaml" 
-	cat ./test/e2e/manifests/deployment_e2e.yaml
-	echo -n "Apply metrics collector deployment: " && kubectl apply -f ./test/e2e/manifests/deployment_e2e.yaml
+	cat ./test/integration/manifests/deployment_update.yaml
+	echo -n "Apply metrics collector deployment: " && kubectl apply -f ./test/integration/manifests/deployment_update.yaml
+	rm ./test/integration/manifests/deployment_update.yaml*
 
     echo -n "available pods: " && kubectl get pods --all-namespaces
 	echo "Waiting 3 minutes for the pod to set up and send data... " && sleep 180
@@ -194,21 +176,6 @@ deploy_metrics_collector() {
 	done 
 	echo "available pods: " && kubectl get pods --all-namespaces
 
-}
- 
-delete_kind_hub() { 
-	echo "====Delete kind cluster=====" 
-    kind delete cluster --name hub
- 	#rm .kube/kind-config-hub 
-}
-
-delete_command_binaries(){
-	cd ${WORKDIR}/..
-	echo "Current directory"
-	echo $(pwd)
-	rm ./kind
-	rm ./kubectl
-	rm ./oc 
 }
 
 
