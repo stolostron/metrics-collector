@@ -14,7 +14,7 @@ test-unit: vendor
 	go test -race -short $(PKGS) -count=1 -coverprofile cover.out
 
 e2e-tests:
-	@echo "TODO: Run e2e-tests"
+	@./cicd-scripts/run-e2e-tests.sh
 
 build:
 	go build ./cmd/metrics-collector
