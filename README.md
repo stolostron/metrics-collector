@@ -41,7 +41,7 @@ To launch a self contained integration environment based on the image built abov
 ./test/integration/setup.sh {REPO}/metrics-collector:latest
 ```
 
-Above command will create a [Kind cluster](https://kind.sigs.k8s.io/).Then [prometheus](https://prometheus.io/) and [thanos](https://thanos.io/) will be deployed in the cluster. Finally, a deployment of metrics collector will be deployed, which will scrape metrics from prometheus and send metrics to thanos server.
+Above command will create a Kind cluster. Then [prometheus](https://prometheus.io/) and [thanos](https://thanos.io/) will be deployed in the cluster. Finally, a deployment of metrics collector will be deployed, which will scrape metrics from prometheus and send metrics to thanos server.
 
 
 To check/operate on the environment, run:

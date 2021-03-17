@@ -5,7 +5,8 @@
 WORKDIR=`pwd`
 
 setup_kubectl_command() {
-	if [[ ! -f /usr/local/bin/kubectl ]]; then
+    command -v kubectl	
+    if [ $? -ne 0 ]; then
 		echo "=====Setup kubectl=====" 
 		# kubectl required for kind
 		echo "Install kubectl from openshift mirror (https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.4.14/openshift-client-mac-4.4.14.tar.gz)" 
@@ -32,9 +33,8 @@ setup_kubectl_command() {
 }
  
 install_kind() { 
-    if [[ ! -f /usr/local/bin/kind ]]; then
-    
-    	echo "=====Create kind cluster=====" 
+    command -v kind	
+    if [ $? -ne 0 ]; then
     	echo "Install kind from (https://kind.sigs.k8s.io/)."
     
     	# uname returns your operating system name

@@ -5,7 +5,7 @@
 WORKDIR=`pwd`
 
 delete_kind_hub() { 
-	echo "====Delete kind cluster=====" 
+    echo "====Delete kind cluster=====" 
     kind delete cluster --name hub
  	rm $HOME/.kube/kind-config-hub > /dev/null 2>&1
 }
