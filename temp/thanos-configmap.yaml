@@ -4,4 +4,4 @@ data:
 kind: ConfigMap
 metadata:
   name: observability-observatorium-thanos-receive-controller-tenants-generated
-  namespace: open-cluster-management-monitoring
+  namespace: open-cluster-management-observability

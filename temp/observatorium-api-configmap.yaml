@@ -8,6 +8,8 @@ data:
       "subjects":
       - "kind": "user"
         "name": "up"
+      - "kind": "group"
+        "name": "acm"
     "roles":
     - "name": "write"
       "permissions":
@@ -25,4 +27,4 @@ metadata:
     app.kubernetes.io/part-of: observatorium
     app.kubernetes.io/version: latest
   name: observability-observatorium-observatorium-api
-  namespace: open-cluster-management-monitoring
+  namespace: open-cluster-management-observability
