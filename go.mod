@@ -25,5 +25,6 @@ replace (
 	github.com/jetstack/cert-manager => github.com/open-cluster-management/cert-manager v0.0.0-20200821135248-2fd523b053f5
 	github.com/prometheus/common => github.com/prometheus/common v0.9.1
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v0.0.0-20190424153033-d3245f150225
+	golang.org/x/text => golang.org/x/text v0.3.5
 	k8s.io/client-go => k8s.io/client-go v0.19.0
 )
