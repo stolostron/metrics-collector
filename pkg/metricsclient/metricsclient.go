@@ -262,9 +262,9 @@ func withCancel(ctx context.Context, client *http.Client, req *http.Request, fn 
 
 func MTLSTransport(logger log.Logger) (*http.Transport, error) {
 	testMode := os.Getenv("UNIT_TEST") != ""
-	caCertFile := "/tlscerts/ca.crt"
-	tlsKeyFile := "/tlscerts/tls.key"
-	tlsCrtFile := "/tlscerts/tls.crt"
+	caCertFile := "/tlscerts/ca/ca.crt"
+	tlsKeyFile := "/tlscerts/certs/tls.key"
+	tlsCrtFile := "/tlscerts/certs/tls.crt"
 	if testMode {
 		caCertFile = "./testdata/ca.crt"
 		tlsKeyFile = "./testdata/tls.key"
