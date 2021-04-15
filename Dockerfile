@@ -1,4 +1,4 @@
-FROM openshift/origin-release:golang-1.13 AS builder
+FROM registry.ci.openshift.org/open-cluster-management/builder:go1.15-linux AS builder
 
 ENV GOFLAGS="-mod=vendor"
 COPY . /go/src/github.com/open-cluster-management/metrics-collector
