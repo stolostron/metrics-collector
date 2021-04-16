@@ -116,7 +116,10 @@ spec:
         volumeMounts:
           - name: observability-managed-cluster-certs
             readOnly: true
-            mountPath: /tlscerts
+            mountPath: /tlscerts/certs
+          - name: observability-managed-cluster-certs
+            readOnly: true
+            mountPath: /tlscerts/ca
           - mountPath: /etc/serving-certs-ca-bundle
             name: serving-certs-ca-bundle
             readOnly: false
