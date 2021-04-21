@@ -126,7 +126,6 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 			return fmt.Errorf("Prometheus server reported unexpected error code: %d", resp.StatusCode)
 		}
 
-		logger.Log(c.logger, logger.Info, "resp code", resp.StatusCode, "body", resp.Body)
 		decoder1 := json.NewDecoder(resp.Body)
 		var data MetricsJson
 		err1 := decoder1.Decode(&data)
@@ -134,7 +133,6 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 			logger.Log(c.logger, logger.Error, "msg", "failed to decode", "err", err1)
 			return nil
 		}
-		logger.Log(c.logger, logger.Info, "data", data)
 		dataStr := ""
 		for _, r := range data.Data.Result {
 			dataStr = dataStr + "apiserver_request_duration_seconds:histogram_quantile_99{"
@@ -165,6 +163,84 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 	if err != nil {
 		return nil, err
 	}
+
+	instances := []string{"10.0.128.80:6443", "10.0.210.4:6443", "10.0.179.55:6443", ".+"}
+	for _, i := range instances {
+		from1, _ := url.Parse("https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query")
+		from1.RawQuery = ""
+		v := from1.Query()
+		v.Add("query", "histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{job=\"apiserver\", instance=~\""+i+"\", verb!=\"WATCH\"}[5m])) by (le))")
+		from1.RawQuery = v.Encode()
+		req1 := &http.Request{Method: "GET", URL: from1}
+		if req1.Header == nil {
+			req1.Header = make(http.Header)
+		}
+		//req1.Header.Set("Accept", "application/json")
+		ctx1, cancel := context.WithTimeout(ctx, c.timeout)
+		req1 = req1.WithContext(ctx1)
+		defer cancel()
+		families := make([]*clientmodel.MetricFamily, 0, 100)
+		err := withCancel(ctx1, c.client, req1, func(resp *http.Response) error {
+			switch resp.StatusCode {
+			case http.StatusOK:
+				gaugeRequestRetrieve.WithLabelValues(c.metricsName, "200").Inc()
+			case http.StatusUnauthorized:
+				gaugeRequestRetrieve.WithLabelValues(c.metricsName, "401").Inc()
+				return fmt.Errorf("Prometheus server requires authentication: %s", resp.Request.URL)
+			case http.StatusForbidden:
+				gaugeRequestRetrieve.WithLabelValues(c.metricsName, "403").Inc()
+				return fmt.Errorf("Prometheus server forbidden: %s", resp.Request.URL)
+			case http.StatusBadRequest:
+				gaugeRequestRetrieve.WithLabelValues(c.metricsName, "400").Inc()
+				return fmt.Errorf("bad request: %s", resp.Request.URL)
+			default:
+				gaugeRequestRetrieve.WithLabelValues(c.metricsName, strconv.Itoa(resp.StatusCode)).Inc()
+				return fmt.Errorf("Prometheus server reported unexpected error code: %d", resp.StatusCode)
+			}
+
+			decoder1 := json.NewDecoder(resp.Body)
+			var data MetricsJson
+			err1 := decoder1.Decode(&data)
+			if err1 != nil {
+				logger.Log(c.logger, logger.Error, "msg", "failed to decode", "err", err1)
+				return nil
+			}
+			dataStr := ""
+			for _, r := range data.Data.Result {
+				dataStr = dataStr + "apiserver_request_duration_seconds:histogram_quantile_99:instance{"
+				for k, v := range r.Metric {
+					dataStr = dataStr + fmt.Sprintf("%s=\"%s\",", k, v)
+				}
+				if i != ".+" {
+					dataStr = dataStr + "instance=\"" + i + "\""
+				} else {
+					dataStr = dataStr + "instance=\"all\""
+				}
+				dataStr = dataStr + "} "
+				dataStr = dataStr + r.Value[1].(string) + " " + strconv.FormatFloat(r.Value[0].(float64)*1000, 'f', -1, 64)
+				dataStr = dataStr + "\n"
+			}
+			logger.Log(c.logger, logger.Info, "dataStr", dataStr)
+			r := ioutil.NopCloser(bytes.NewReader([]byte(dataStr)))
+			decoder := expfmt.NewDecoder(r, expfmt.FmtText)
+			for {
+				family := &clientmodel.MetricFamily{}
+				families = append(families, family)
+				if err := decoder.Decode(family); err != nil {
+					if err != io.EOF {
+						logger.Log(c.logger, logger.Error, "msg", "error reading body", "err", err)
+					}
+					break
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return families, nil
 }
 

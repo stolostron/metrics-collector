@@ -298,7 +298,7 @@ func (w *Worker) Run(ctx context.Context) {
 func (w *Worker) forward(ctx context.Context) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-
+	fStart := time.Now()
 	// Load the match rules each time.
 	from := w.from
 
@@ -321,7 +321,7 @@ func (w *Worker) forward(ctx context.Context) error {
 		return err
 	}
 	elapsed := time.Since(start)
-	rlogger.Log(w.logger, rlogger.Info, "took time for federate", elapsed)
+	rlogger.Log(w.logger, rlogger.Info, "federate_time", elapsed)
 
 	start = time.Now()
 	families1, err := w.fromClient.Retrieve1(ctx)
@@ -331,7 +331,7 @@ func (w *Worker) forward(ctx context.Context) error {
 		families = append(families, families1...)
 	}
 	elapsed = time.Since(start)
-	rlogger.Log(w.logger, rlogger.Info, "took time for query", elapsed)
+	rlogger.Log(w.logger, rlogger.Info, "query_time", elapsed)
 
 	before := metricfamily.MetricsCount(families)
 	if err := metricfamily.Filter(families, w.transformer); err != nil {
@@ -381,5 +381,8 @@ func (w *Worker) forward(ctx context.Context) error {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
 		}
 	}
+
+	elapsed = time.Since(fStart)
+	rlogger.Log(w.logger, rlogger.Info, "forward_total_time", elapsed)
 	return err
 }
