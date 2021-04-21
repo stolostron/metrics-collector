@@ -311,6 +311,7 @@ func (w *Worker) forward(ctx context.Context) error {
 	from.RawQuery = v.Encode()
 
 	req := &http.Request{Method: "GET", URL: from}
+	start := time.Now()
 	families, err := w.fromClient.Retrieve(ctx, req)
 	if err != nil {
 		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve metrics")
@@ -319,6 +320,18 @@ func (w *Worker) forward(ctx context.Context) error {
 		}
 		return err
 	}
+	elapsed := time.Since(start)
+	rlogger.Log(w.logger, rlogger.Info, "took time for federate", elapsed)
+
+	start = time.Now()
+	families1, err := w.fromClient.Retrieve1(ctx)
+	if err != nil {
+		rlogger.Log(w.logger, rlogger.Warn, "msg", "Failed to get recording", "err", err)
+	} else {
+		families = append(families, families1...)
+	}
+	elapsed = time.Since(start)
+	rlogger.Log(w.logger, rlogger.Info, "took time for query", elapsed)
 
 	before := metricfamily.MetricsCount(families)
 	if err := metricfamily.Filter(families, w.transformer); err != nil {
