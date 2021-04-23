@@ -179,7 +179,6 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 		ctx1, cancel := context.WithTimeout(ctx, c.timeout)
 		req1 = req1.WithContext(ctx1)
 		defer cancel()
-		families := make([]*clientmodel.MetricFamily, 0, 100)
 		err := withCancel(ctx1, c.client, req1, func(resp *http.Response) error {
 			switch resp.StatusCode {
 			case http.StatusOK:
