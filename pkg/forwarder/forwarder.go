@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	rlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
 	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
+	"github.com/open-cluster-management/metrics-collector/pkg/simulator"
 	"github.com/open-cluster-management/metrics-collector/pkg/status"
 )
 
@@ -299,32 +301,38 @@ func (w *Worker) forward(ctx context.Context) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	// Load the match rules each time.
-	from := w.from
+	var families []*clientmodel.MetricFamily
+	if os.Getenv("SIMULATE") == "true" {
+		families = simulator.SimulateMetrics(w.logger)
+	} else {
+		// Load the match rules each time.
+		from := w.from
 
-	// reset query from last invocation, otherwise match rules will be appended
-	w.from.RawQuery = ""
-	v := from.Query()
-	for _, rule := range w.rules {
-		v.Add("match[]", rule)
-	}
-	from.RawQuery = v.Encode()
-
-	req := &http.Request{Method: "GET", URL: from}
-	families, err := w.fromClient.Retrieve(ctx, req)
-	if err != nil {
-		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve metrics")
-		if statusErr != nil {
-			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+		// reset query from last invocation, otherwise match rules will be appended
+		w.from.RawQuery = ""
+		v := from.Query()
+		for _, rule := range w.rules {
+			v.Add("match[]", rule)
 		}
-		return err
+		from.RawQuery = v.Encode()
+
+		req := &http.Request{Method: "GET", URL: from}
+		var err error
+		families, err = w.fromClient.Retrieve(ctx, req)
+		if err != nil {
+			statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve metrics")
+			if statusErr != nil {
+				rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+			}
+			return err
+		}
 	}
 
 	before := metricfamily.MetricsCount(families)
 	if err := metricfamily.Filter(families, w.transformer); err != nil {
 		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to filter metrics")
 		if statusErr != nil {
-			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
 		return err
 	}
@@ -341,7 +349,7 @@ func (w *Worker) forward(ctx context.Context) error {
 		rlogger.Log(w.logger, rlogger.Warn, "msg", "no metrics to send, doing nothing")
 		statusErr := w.status.UpdateStatus("Available", "Available", "No metrics to send")
 		if statusErr != nil {
-			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
 		return nil
 	}
@@ -350,22 +358,22 @@ func (w *Worker) forward(ctx context.Context) error {
 		rlogger.Log(w.logger, rlogger.Warn, "msg", "to is nil, doing nothing")
 		statusErr := w.status.UpdateStatus("Available", "Available", "Metrics is not required to send")
 		if statusErr != nil {
-			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
 		return nil
 	}
 
-	req = &http.Request{Method: "POST", URL: w.to}
-	err = w.toClient.RemoteWrite(ctx, req, families, w.interval)
+	req := &http.Request{Method: "POST", URL: w.to}
+	err := w.toClient.RemoteWrite(ctx, req, families, w.interval)
 	if err != nil {
 		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to send metrics")
 		if statusErr != nil {
-			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
 	} else {
 		statusErr := w.status.UpdateStatus("Available", "Available", "Send metrics successfully")
 		if statusErr != nil {
-			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
 	}
 	return err
