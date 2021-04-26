@@ -138,9 +138,6 @@ func (o *Options) Run() error {
 		o.Labels[values[0]] = values[1]
 	}
 
-	if len(o.RenameFlag) == 0 {
-		o.RenameFlag = []string{"ALERTS=alerts"}
-	}
 	for _, flag := range o.RenameFlag {
 		if len(flag) == 0 {
 			continue
