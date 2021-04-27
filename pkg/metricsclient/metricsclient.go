@@ -27,7 +27,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/prompb"
+	"github.com/prometheus/prometheus/promql"
 
 	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/reader"
@@ -133,29 +135,77 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 			logger.Log(c.logger, logger.Error, "msg", "failed to decode", "err", err1)
 			return nil
 		}
-		dataStr := ""
+		/* 		dataStr := ""
+		   		for _, r := range data.Data.Result {
+		   			dataStr = dataStr + "apiserver_request_duration_seconds:histogram_quantile_99{"
+		   			for k, v := range r.Metric {
+		   				dataStr = dataStr + fmt.Sprintf("%s=\"%s\",", k, v)
+		   			}
+		   			dataStr = strings.TrimSuffix(dataStr, ",")
+		   			dataStr = dataStr + "} "
+		   			dataStr = dataStr + r.Value[1].(string) + " " + strconv.FormatFloat(r.Value[0].(float64)*1000, 'f', -1, 64)
+		   			dataStr = dataStr + "\n"
+		   		}
+		   		logger.Log(c.logger, logger.Info, "dataStr", dataStr)
+		   		r := ioutil.NopCloser(bytes.NewReader([]byte(dataStr)))
+		   		decoder := expfmt.NewDecoder(r, expfmt.FmtText)
+		   		for {
+		   			family := &clientmodel.MetricFamily{}
+		   			families = append(families, family)
+		   			if err := decoder.Decode(family); err != nil {
+		   				if err != io.EOF {
+		   					logger.Log(c.logger, logger.Error, "msg", "error reading body", "err", err)
+		   				}
+		   				break
+		   			}
+		   		} */
+		vec := make(promql.Vector, 0, 100)
 		for _, r := range data.Data.Result {
-			dataStr = dataStr + "apiserver_request_duration_seconds:histogram_quantile_99{"
+			var t int64
+			var v float64
+			t = int64(r.Value[0].(float64) * 1000)
+			v, _ = strconv.ParseFloat(r.Value[1].(string), 64)
+			ls := []labels.Label{}
 			for k, v := range r.Metric {
-				dataStr = dataStr + fmt.Sprintf("%s=\"%s\",", k, v)
-			}
-			dataStr = strings.TrimSuffix(dataStr, ",")
-			dataStr = dataStr + "} "
-			dataStr = dataStr + r.Value[1].(string) + " " + strconv.FormatFloat(r.Value[0].(float64)*1000, 'f', -1, 64)
-			dataStr = dataStr + "\n"
-		}
-		logger.Log(c.logger, logger.Info, "dataStr", dataStr)
-		r := ioutil.NopCloser(bytes.NewReader([]byte(dataStr)))
-		decoder := expfmt.NewDecoder(r, expfmt.FmtText)
-		for {
-			family := &clientmodel.MetricFamily{}
-			families = append(families, family)
-			if err := decoder.Decode(family); err != nil {
-				if err != io.EOF {
-					logger.Log(c.logger, logger.Error, "msg", "error reading body", "err", err)
+				l := &labels.Label{
+					Name:  k,
+					Value: v,
 				}
-				break
+				ls = append(ls, *l)
 			}
+			vec = append(vec, promql.Sample{
+				Metric: ls,
+				Point:  promql.Point{T: t, V: v},
+			})
+		}
+		logger.Log(c.logger, logger.Info, "vec len", len(vec))
+
+		for _, s := range vec {
+			protMetric := &clientmodel.Metric{
+				Untyped: &clientmodel.Untyped{},
+			}
+			protMetricFam := &clientmodel.MetricFamily{
+				Type: clientmodel.MetricType_UNTYPED.Enum(),
+				Name: proto.String("apiserver_request_duration_seconds:histogram_quantile_99"),
+			}
+			for _, l := range s.Metric {
+				if l.Value == "" {
+					// No value means unset. Never consider those labels.
+					// This is also important to protect against nameless metrics.
+					continue
+				}
+				protMetric.Label = append(protMetric.Label, &clientmodel.LabelPair{
+					Name:  proto.String(l.Name),
+					Value: proto.String(l.Value),
+				})
+			}
+
+			protMetric.TimestampMs = proto.Int64(s.T)
+			protMetric.Untyped.Value = proto.Float64(s.V)
+
+			protMetricFam.Metric = append(protMetricFam.Metric, protMetric)
+			logger.Log(c.logger, logger.Info, "protMetricFam", fmt.Sprintf("%v", protMetricFam))
+			families = append(families, protMetricFam)
 		}
 
 		return nil
@@ -163,6 +213,8 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Log(c.logger, logger.Info, "families len", len(families))
 
 	instances := []string{"10.0.128.80:6443", "10.0.210.4:6443", "10.0.179.55:6443", ".+"}
 	for _, i := range instances {
@@ -219,7 +271,7 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 				dataStr = dataStr + r.Value[1].(string) + " " + strconv.FormatFloat(r.Value[0].(float64)*1000, 'f', -1, 64)
 				dataStr = dataStr + "\n"
 			}
-			logger.Log(c.logger, logger.Info, "dataStr", dataStr)
+			//logger.Log(c.logger, logger.Info, "dataStr", dataStr)
 			r := ioutil.NopCloser(bytes.NewReader([]byte(dataStr)))
 			decoder := expfmt.NewDecoder(r, expfmt.FmtText)
 			for {
@@ -231,6 +283,7 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 					}
 					break
 				}
+				logger.Log(c.logger, logger.Info, "family", fmt.Sprintf("%v", family))
 			}
 
 			return nil
@@ -239,7 +292,10 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 			return nil, err
 		}
 	}
-
+	logger.Log(c.logger, logger.Info, "families", fmt.Sprintf("%v", families))
+	logger.Log(c.logger, logger.Info, "families len", len(families))
+	logger.Log(c.logger, logger.Info, "families0", fmt.Sprintf("%v", families[0]))
+	logger.Log(c.logger, logger.Info, "families10", fmt.Sprintf("%v", families[10]))
 	return families, nil
 }
 
