@@ -323,8 +323,19 @@ func (w *Worker) forward(ctx context.Context) error {
 	elapsed := time.Since(start)
 	rlogger.Log(w.logger, rlogger.Info, "federate_time", elapsed)
 
+	rulePromql := "histogram_quantile(0.99,sum(rate(apiserver_request_duration_seconds_bucket{job=\"apiserver\", verb!=\"WATCH\"}[5m])) by (verb,le))"
+	name := "apiserver_request_duration_seconds:histogram_quantile_99"
+	query := url.URL{}
+	query.Scheme = "https"
+	query.Host = from.Host
+	query.Path = "/api/v1/query"
+	query.RawQuery = ""
+	v = query.Query()
+	v.Add("query", rulePromql)
+	query.RawQuery = v.Encode()
+	queryReq := &http.Request{Method: "GET", URL: &query}
 	start = time.Now()
-	families1, err := w.fromClient.Retrieve1(ctx)
+	families1, err := w.fromClient.RetrievRecordingMetrics(ctx, queryReq, name)
 	if err != nil {
 		rlogger.Log(w.logger, rlogger.Warn, "msg", "Failed to get recording", "err", err)
 	} else {

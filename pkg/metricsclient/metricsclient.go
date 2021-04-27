@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -94,23 +93,13 @@ type MetricsResult struct {
 	Value  []interface{}     `json:"value"`
 }
 
-func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, error) {
-	from1, _ := url.Parse("https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query")
+func (c *Client) RetrievRecordingMetrics(ctx context.Context, req *http.Request, name string) ([]*clientmodel.MetricFamily, error) {
 
-	from1.RawQuery = ""
-	v := from1.Query()
-	v.Add("query", "histogram_quantile(0.99,sum(rate(apiserver_request_duration_seconds_bucket{job=\"apiserver\", verb!=\"WATCH\"}[5m])) by (verb,le))")
-	from1.RawQuery = v.Encode()
-	req1 := &http.Request{Method: "GET", URL: from1}
-	if req1.Header == nil {
-		req1.Header = make(http.Header)
-	}
-	//req1.Header.Set("Accept", "application/json")
-	ctx1, cancel := context.WithTimeout(ctx, c.timeout)
-	req1 = req1.WithContext(ctx1)
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	req = req.WithContext(ctx)
 	defer cancel()
 	families := make([]*clientmodel.MetricFamily, 0, 100)
-	err := withCancel(ctx1, c.client, req1, func(resp *http.Response) error {
+	err := withCancel(ctx, c.client, req, func(resp *http.Response) error {
 		switch resp.StatusCode {
 		case http.StatusOK:
 			gaugeRequestRetrieve.WithLabelValues(c.metricsName, "200").Inc()
@@ -135,30 +124,6 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 			logger.Log(c.logger, logger.Error, "msg", "failed to decode", "err", err1)
 			return nil
 		}
-		/* 		dataStr := ""
-		   		for _, r := range data.Data.Result {
-		   			dataStr = dataStr + "apiserver_request_duration_seconds:histogram_quantile_99{"
-		   			for k, v := range r.Metric {
-		   				dataStr = dataStr + fmt.Sprintf("%s=\"%s\",", k, v)
-		   			}
-		   			dataStr = strings.TrimSuffix(dataStr, ",")
-		   			dataStr = dataStr + "} "
-		   			dataStr = dataStr + r.Value[1].(string) + " " + strconv.FormatFloat(r.Value[0].(float64)*1000, 'f', -1, 64)
-		   			dataStr = dataStr + "\n"
-		   		}
-		   		logger.Log(c.logger, logger.Info, "dataStr", dataStr)
-		   		r := ioutil.NopCloser(bytes.NewReader([]byte(dataStr)))
-		   		decoder := expfmt.NewDecoder(r, expfmt.FmtText)
-		   		for {
-		   			family := &clientmodel.MetricFamily{}
-		   			families = append(families, family)
-		   			if err := decoder.Decode(family); err != nil {
-		   				if err != io.EOF {
-		   					logger.Log(c.logger, logger.Error, "msg", "error reading body", "err", err)
-		   				}
-		   				break
-		   			}
-		   		} */
 		vec := make(promql.Vector, 0, 100)
 		for _, r := range data.Data.Result {
 			var t int64
@@ -178,7 +143,6 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 				Point:  promql.Point{T: t, V: v},
 			})
 		}
-		logger.Log(c.logger, logger.Info, "vec len", len(vec))
 
 		for _, s := range vec {
 			protMetric := &clientmodel.Metric{
@@ -186,7 +150,7 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 			}
 			protMetricFam := &clientmodel.MetricFamily{
 				Type: clientmodel.MetricType_UNTYPED.Enum(),
-				Name: proto.String("apiserver_request_duration_seconds:histogram_quantile_99"),
+				Name: proto.String(name),
 			}
 			for _, l := range s.Metric {
 				if l.Value == "" {
@@ -204,7 +168,6 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 			protMetric.Untyped.Value = proto.Float64(s.V)
 
 			protMetricFam.Metric = append(protMetricFam.Metric, protMetric)
-			logger.Log(c.logger, logger.Info, "protMetricFam", fmt.Sprintf("%v", protMetricFam))
 			families = append(families, protMetricFam)
 		}
 
@@ -214,88 +177,6 @@ func (c *Client) Retrieve1(ctx context.Context) ([]*clientmodel.MetricFamily, er
 		return nil, err
 	}
 
-	logger.Log(c.logger, logger.Info, "families len", len(families))
-
-	instances := []string{"10.0.128.80:6443", "10.0.210.4:6443", "10.0.179.55:6443", ".+"}
-	for _, i := range instances {
-		from1, _ := url.Parse("https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query")
-		from1.RawQuery = ""
-		v := from1.Query()
-		v.Add("query", "histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{job=\"apiserver\", instance=~\""+i+"\", verb!=\"WATCH\"}[5m])) by (le))")
-		from1.RawQuery = v.Encode()
-		req1 := &http.Request{Method: "GET", URL: from1}
-		if req1.Header == nil {
-			req1.Header = make(http.Header)
-		}
-		//req1.Header.Set("Accept", "application/json")
-		ctx1, cancel := context.WithTimeout(ctx, c.timeout)
-		req1 = req1.WithContext(ctx1)
-		defer cancel()
-		err := withCancel(ctx1, c.client, req1, func(resp *http.Response) error {
-			switch resp.StatusCode {
-			case http.StatusOK:
-				gaugeRequestRetrieve.WithLabelValues(c.metricsName, "200").Inc()
-			case http.StatusUnauthorized:
-				gaugeRequestRetrieve.WithLabelValues(c.metricsName, "401").Inc()
-				return fmt.Errorf("Prometheus server requires authentication: %s", resp.Request.URL)
-			case http.StatusForbidden:
-				gaugeRequestRetrieve.WithLabelValues(c.metricsName, "403").Inc()
-				return fmt.Errorf("Prometheus server forbidden: %s", resp.Request.URL)
-			case http.StatusBadRequest:
-				gaugeRequestRetrieve.WithLabelValues(c.metricsName, "400").Inc()
-				return fmt.Errorf("bad request: %s", resp.Request.URL)
-			default:
-				gaugeRequestRetrieve.WithLabelValues(c.metricsName, strconv.Itoa(resp.StatusCode)).Inc()
-				return fmt.Errorf("Prometheus server reported unexpected error code: %d", resp.StatusCode)
-			}
-
-			decoder1 := json.NewDecoder(resp.Body)
-			var data MetricsJson
-			err1 := decoder1.Decode(&data)
-			if err1 != nil {
-				logger.Log(c.logger, logger.Error, "msg", "failed to decode", "err", err1)
-				return nil
-			}
-			dataStr := ""
-			for _, r := range data.Data.Result {
-				dataStr = dataStr + "apiserver_request_duration_seconds:histogram_quantile_99:instance{"
-				for k, v := range r.Metric {
-					dataStr = dataStr + fmt.Sprintf("%s=\"%s\",", k, v)
-				}
-				if i != ".+" {
-					dataStr = dataStr + "instance=\"" + i + "\""
-				} else {
-					dataStr = dataStr + "instance=\"all\""
-				}
-				dataStr = dataStr + "} "
-				dataStr = dataStr + r.Value[1].(string) + " " + strconv.FormatFloat(r.Value[0].(float64)*1000, 'f', -1, 64)
-				dataStr = dataStr + "\n"
-			}
-			//logger.Log(c.logger, logger.Info, "dataStr", dataStr)
-			r := ioutil.NopCloser(bytes.NewReader([]byte(dataStr)))
-			decoder := expfmt.NewDecoder(r, expfmt.FmtText)
-			for {
-				family := &clientmodel.MetricFamily{}
-				families = append(families, family)
-				if err := decoder.Decode(family); err != nil {
-					if err != io.EOF {
-						logger.Log(c.logger, logger.Error, "msg", "error reading body", "err", err)
-					}
-					break
-				}
-				logger.Log(c.logger, logger.Info, "family", fmt.Sprintf("%v", family))
-			}
-
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	logger.Log(c.logger, logger.Info, "families", fmt.Sprintf("%v", families))
-	logger.Log(c.logger, logger.Info, "families len", len(families))
-	logger.Log(c.logger, logger.Info, "families0", fmt.Sprintf("%v", families[0]))
-	logger.Log(c.logger, logger.Info, "families10", fmt.Sprintf("%v", families[10]))
 	return families, nil
 }
 
