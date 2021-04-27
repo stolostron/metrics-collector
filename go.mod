@@ -1,6 +1,6 @@
 module github.com/open-cluster-management/metrics-collector
 
-go 1.15
+go 1.16
 
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
