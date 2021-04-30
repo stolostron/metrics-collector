@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -72,6 +73,7 @@ type Config struct {
 	Interval          time.Duration
 	LimitBytes        int64
 	Rules             []string
+	RecordingRules    []string
 	RulesFile         string
 	Transformer       metricfamily.Transformer
 
@@ -87,9 +89,10 @@ type Worker struct {
 	from       *url.URL
 	to         *url.URL
 
-	interval    time.Duration
-	transformer metricfamily.Transformer
-	rules       []string
+	interval       time.Duration
+	transformer    metricfamily.Transformer
+	rules          []string
+	recordingRules []string
 
 	lastMetrics []*clientmodel.MetricFamily
 	lock        sync.Mutex
@@ -230,6 +233,19 @@ func New(cfg Config) (*Worker, error) {
 	}
 	w.rules = rules
 
+	// Configure the recording rules.
+	recordingRules := cfg.RecordingRules
+	for i := 0; i < len(recordingRules); {
+		s := strings.TrimSpace(recordingRules[i])
+		if len(s) == 0 {
+			recordingRules = append(recordingRules[:i], recordingRules[i+1:]...)
+			continue
+		}
+		recordingRules[i] = s
+		i++
+	}
+	w.recordingRules = recordingRules
+
 	s, err := status.New(logger)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create StatusReport: %v", err)
@@ -257,6 +273,7 @@ func (w *Worker) Reconfigure(cfg Config) error {
 	w.to = worker.to
 	w.transformer = worker.transformer
 	w.rules = worker.rules
+	w.recordingRules = worker.recordingRules
 
 	// Signal a restart to Run func.
 	// Do this in a goroutine since we do not care if restarting the Run loop is asynchronous.
@@ -323,26 +340,38 @@ func (w *Worker) forward(ctx context.Context) error {
 	elapsed := time.Since(start)
 	rlogger.Log(w.logger, rlogger.Info, "federate_time", elapsed)
 
-	rulePromql := "histogram_quantile(0.99,sum(rate(apiserver_request_duration_seconds_bucket{job=\"apiserver\", verb!=\"WATCH\"}[5m])) by (verb,le))"
-	name := "apiserver_request_duration_seconds:histogram_quantile_99"
-	query := url.URL{}
-	query.Scheme = "https"
-	query.Host = from.Host
-	query.Path = "/api/v1/query"
-	query.RawQuery = ""
-	v = query.Query()
-	v.Add("query", rulePromql)
-	query.RawQuery = v.Encode()
-	queryReq := &http.Request{Method: "GET", URL: &query}
 	start = time.Now()
-	families1, err := w.fromClient.RetrievRecordingMetrics(ctx, queryReq, name)
-	if err != nil {
-		rlogger.Log(w.logger, rlogger.Warn, "msg", "Failed to get recording", "err", err)
-	} else {
-		families = append(families, families1...)
+	for _, rule := range w.recordingRules {
+		var r map[string]string
+		err := json.Unmarshal(([]byte)(rule), &r)
+		if err != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", "Input error", "err", err)
+			continue
+		}
+		rname := r["name"]
+		rquery := r["query"]
+
+		// reset query from last invocation, otherwise match rules will be appended
+		from.RawQuery = ""
+		from.Path = "/api/v1/query"
+		v := from.Query()
+		v.Add("query", rquery)
+		from.RawQuery = v.Encode()
+
+		req := &http.Request{Method: "GET", URL: from}
+		rfamilies, err := w.fromClient.RetrievRecordingMetrics(ctx, req, rname)
+		if err != nil {
+			statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve recording metrics")
+			if statusErr != nil {
+				rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+			}
+			return err
+		} else {
+			families = append(families, rfamilies...)
+		}
 	}
 	elapsed = time.Since(start)
-	rlogger.Log(w.logger, rlogger.Info, "query_time", elapsed)
+	rlogger.Log(w.logger, rlogger.Info, "recording_query_time", elapsed)
 
 	before := metricfamily.MetricsCount(families)
 	if err := metricfamily.Filter(families, w.transformer); err != nil {

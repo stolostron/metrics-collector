@@ -117,11 +117,11 @@ func (c *Client) RetrievRecordingMetrics(ctx context.Context, req *http.Request,
 			return fmt.Errorf("Prometheus server reported unexpected error code: %d", resp.StatusCode)
 		}
 
-		decoder1 := json.NewDecoder(resp.Body)
+		decoder := json.NewDecoder(resp.Body)
 		var data MetricsJson
-		err1 := decoder1.Decode(&data)
-		if err1 != nil {
-			logger.Log(c.logger, logger.Error, "msg", "failed to decode", "err", err1)
+		err := decoder.Decode(&data)
+		if err != nil {
+			logger.Log(c.logger, logger.Error, "msg", "failed to decode", "err", err)
 			return nil
 		}
 		vec := make(promql.Vector, 0, 100)
