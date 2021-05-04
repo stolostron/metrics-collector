@@ -22,10 +22,10 @@ import (
 
 const (
 	defaultMetrisNumber = 1000
-	defaultLabelNumber  = 10
+	defaultLabelNumber  = 19
 	metricsNamePrefix   = "simulated_metrics"
 	labelPrefix         = "label"
-	labelValuePrefix    = "value"
+	labelValuePrefix    = "label-value-prefix"
 )
 
 func SimulateMetrics(logger log.Logger) []*clientmodel.MetricFamily {
