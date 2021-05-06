@@ -58,8 +58,8 @@ func main() {
 	cmd.Flags().StringVar(&opt.RulesFile, "match-file", opt.RulesFile, "A file containing match rules to federate, one rule per line.")
 
 	cmd.Flags().StringSliceVar(&opt.LabelFlag, "label", opt.LabelFlag, "Labels to add to each outgoing metric, in key=value form.")
-	cmd.Flags().StringSliceVar(&opt.RenameFlag, "rename", opt.RenameFlag, "Rename metrics before sending by specifying OLD=NEW name pairs. Defaults to renaming ALERTS to alerts. Defaults to ALERTS=alerts.")
-	cmd.Flags().StringArrayVar(&opt.ElideLabels, "elide-label", opt.ElideLabels, "A list of labels to be elided from outgoing metrics.")
+	cmd.Flags().StringSliceVar(&opt.RenameFlag, "rename", opt.RenameFlag, "Rename metrics before sending by specifying OLD=NEW name pairs.")
+	cmd.Flags().StringArrayVar(&opt.ElideLabels, "elide-label", opt.ElideLabels, "A list of labels to be elided from outgoing metrics. Default to elide label prometheus and prometheus_replica")
 
 	cmd.Flags().StringSliceVar(&opt.AnonymizeLabels, "anonymize-labels", opt.AnonymizeLabels, "Anonymize the values of the provided values before sending them on.")
 	cmd.Flags().StringVar(&opt.AnonymizeSalt, "anonymize-salt", opt.AnonymizeSalt, "A secret and unguessable value used to anonymize the input data.")
@@ -190,11 +190,12 @@ func (o *Options) Run() error {
 		})
 	}
 
-	if len(o.ElideLabels) > 0 {
-		transformer.WithFunc(func() metricfamily.Transformer {
-			return metricfamily.NewElide(o.ElideLabels...)
-		})
+	if len(o.ElideLabels) == 0 {
+		o.ElideLabels = []string{"prometheus", "prometheus_replica"}
 	}
+	transformer.WithFunc(func() metricfamily.Transformer {
+		return metricfamily.NewElide(o.ElideLabels...)
+	})
 
 	transformer.WithFunc(func() metricfamily.Transformer {
 		return metricfamily.NewDropInvalidFederateSamples(time.Now().Add(-24 * time.Hour))
