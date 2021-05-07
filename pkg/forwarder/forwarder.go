@@ -316,20 +316,8 @@ func (w *Worker) forward(ctx context.Context) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	fStart := time.Now()
-	// Load the match rules each time.
-	from := w.from
 
-	// reset query from last invocation, otherwise match rules will be appended
-	w.from.RawQuery = ""
-	v := from.Query()
-	for _, rule := range w.rules {
-		v.Add("match[]", rule)
-	}
-	from.RawQuery = v.Encode()
-
-	req := &http.Request{Method: "GET", URL: from}
-	start := time.Now()
-	families, err := w.fromClient.Retrieve(ctx, req)
+	families, err := w.getFederateMetrics(ctx)
 	if err != nil {
 		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve metrics")
 		if statusErr != nil {
@@ -337,41 +325,17 @@ func (w *Worker) forward(ctx context.Context) error {
 		}
 		return err
 	}
-	elapsed := time.Since(start)
-	rlogger.Log(w.logger, rlogger.Info, "federate_time", elapsed)
 
-	start = time.Now()
-	for _, rule := range w.recordingRules {
-		var r map[string]string
-		err := json.Unmarshal(([]byte)(rule), &r)
-		if err != nil {
-			rlogger.Log(w.logger, rlogger.Warn, "msg", "Input error", "err", err)
-			continue
+	rfamilies, err := w.getRecordingMetrics(ctx)
+	if err != nil {
+		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve recording metrics")
+		if statusErr != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
 		}
-		rname := r["name"]
-		rquery := r["query"]
-
-		// reset query from last invocation, otherwise match rules will be appended
-		from.RawQuery = ""
-		from.Path = "/api/v1/query"
-		v := from.Query()
-		v.Add("query", rquery)
-		from.RawQuery = v.Encode()
-
-		req := &http.Request{Method: "GET", URL: from}
-		rfamilies, err := w.fromClient.RetrievRecordingMetrics(ctx, req, rname)
-		if err != nil {
-			statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve recording metrics")
-			if statusErr != nil {
-				rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
-			}
-			return err
-		} else {
-			families = append(families, rfamilies...)
-		}
+		return err
+	} else {
+		families = append(families, rfamilies...)
 	}
-	elapsed = time.Since(start)
-	rlogger.Log(w.logger, rlogger.Info, "recording_query_time", elapsed)
 
 	before := metricfamily.MetricsCount(families)
 	if err := metricfamily.Filter(families, w.transformer); err != nil {
@@ -408,7 +372,7 @@ func (w *Worker) forward(ctx context.Context) error {
 		return nil
 	}
 
-	req = &http.Request{Method: "POST", URL: w.to}
+	req := &http.Request{Method: "POST", URL: w.to}
 	err = w.toClient.RemoteWrite(ctx, req, families, w.interval)
 	if err != nil {
 		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to send metrics")
@@ -422,7 +386,71 @@ func (w *Worker) forward(ctx context.Context) error {
 		}
 	}
 
-	elapsed = time.Since(fStart)
+	elapsed := time.Since(fStart)
 	rlogger.Log(w.logger, rlogger.Info, "forward_total_time", elapsed)
 	return err
+}
+
+func (w *Worker) getFederateMetrics(ctx context.Context) ([]*clientmodel.MetricFamily, error) {
+	start := time.Now()
+	from := w.from
+
+	// reset query from last invocation, otherwise match rules will be appended
+	w.from.RawQuery = ""
+	v := from.Query()
+	for _, rule := range w.rules {
+		v.Add("match[]", rule)
+	}
+	from.RawQuery = v.Encode()
+
+	req := &http.Request{Method: "GET", URL: from}
+	families, err := w.fromClient.Retrieve(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	elapsed := time.Since(start)
+	rlogger.Log(w.logger, rlogger.Info, "federate_time", elapsed)
+	return families, nil
+}
+
+func (w *Worker) getRecordingMetrics(ctx context.Context) ([]*clientmodel.MetricFamily, error) {
+	families := []*clientmodel.MetricFamily{}
+	start := time.Now()
+	from := w.from
+
+	originPath := from.Path
+	from.Path = "/api/v1/query"
+	defer func() {
+		w.from.Path = originPath
+	}()
+
+	for _, rule := range w.recordingRules {
+		var r map[string]string
+		err := json.Unmarshal(([]byte)(rule), &r)
+		if err != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", "Input error", "err", err)
+			continue
+		}
+		rname := r["name"]
+		rquery := r["query"]
+
+		// reset query from last invocation, otherwise match rules will be appended
+		from.RawQuery = ""
+		v := w.from.Query()
+		v.Add("query", rquery)
+		from.RawQuery = v.Encode()
+
+		req := &http.Request{Method: "GET", URL: from}
+		rfamilies, err := w.fromClient.RetrievRecordingMetrics(ctx, req, rname)
+		if err != nil {
+			return families, err
+		} else {
+			families = append(families, rfamilies...)
+		}
+	}
+
+	elapsed := time.Since(start)
+	rlogger.Log(w.logger, rlogger.Info, "recording_query_time", elapsed)
+	return families, nil
 }
