@@ -315,7 +315,6 @@ func (w *Worker) Run(ctx context.Context) {
 func (w *Worker) forward(ctx context.Context) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	fStart := time.Now()
 
 	families, err := w.getFederateMetrics(ctx)
 	if err != nil {
@@ -332,7 +331,6 @@ func (w *Worker) forward(ctx context.Context) error {
 		if statusErr != nil {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
 		}
-		return err
 	} else {
 		families = append(families, rfamilies...)
 	}
@@ -386,17 +384,13 @@ func (w *Worker) forward(ctx context.Context) error {
 		}
 	}
 
-	elapsed := time.Since(fStart)
-	rlogger.Log(w.logger, rlogger.Info, "forward_total_time", elapsed)
 	return err
 }
 
 func (w *Worker) getFederateMetrics(ctx context.Context) ([]*clientmodel.MetricFamily, error) {
-	start := time.Now()
-	from := w.from
-
 	// reset query from last invocation, otherwise match rules will be appended
-	w.from.RawQuery = ""
+	from := w.from
+	from.RawQuery = ""
 	v := from.Query()
 	for _, rule := range w.rules {
 		v.Add("match[]", rule)
@@ -406,21 +400,21 @@ func (w *Worker) getFederateMetrics(ctx context.Context) ([]*clientmodel.MetricF
 	req := &http.Request{Method: "GET", URL: from}
 	families, err := w.fromClient.Retrieve(ctx, req)
 	if err != nil {
+		rlogger.Log(w.logger, rlogger.Warn, "msg", "Failed to retrieve metrics", "err", err)
 		return nil, err
 	}
 
-	elapsed := time.Since(start)
-	rlogger.Log(w.logger, rlogger.Info, "federate_time", elapsed)
 	return families, nil
 }
 
 func (w *Worker) getRecordingMetrics(ctx context.Context) ([]*clientmodel.MetricFamily, error) {
+	var e error
 	families := []*clientmodel.MetricFamily{}
-	start := time.Now()
-	from := w.from
 
+	from := w.from
 	originPath := from.Path
 	from.Path = "/api/v1/query"
+	// Path /api/v1/query is only used in getRecordingMetrics(), reset to origin path before return.
 	defer func() {
 		w.from.Path = originPath
 	}()
@@ -430,6 +424,7 @@ func (w *Worker) getRecordingMetrics(ctx context.Context) ([]*clientmodel.Metric
 		err := json.Unmarshal(([]byte)(rule), &r)
 		if err != nil {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", "Input error", "err", err)
+			e = err
 			continue
 		}
 		rname := r["name"]
@@ -444,13 +439,13 @@ func (w *Worker) getRecordingMetrics(ctx context.Context) ([]*clientmodel.Metric
 		req := &http.Request{Method: "GET", URL: from}
 		rfamilies, err := w.fromClient.RetrievRecordingMetrics(ctx, req, rname)
 		if err != nil {
-			return families, err
+			rlogger.Log(w.logger, rlogger.Warn, "msg", "Failed to retrieve recording metrics", "err", err)
+			e = err
+			continue
 		} else {
 			families = append(families, rfamilies...)
 		}
 	}
 
-	elapsed := time.Since(start)
-	rlogger.Log(w.logger, rlogger.Info, "recording_query_time", elapsed)
-	return families, nil
+	return families, e
 }
