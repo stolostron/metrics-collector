@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -74,6 +75,7 @@ type Config struct {
 	Interval          time.Duration
 	LimitBytes        int64
 	Rules             []string
+	RecordingRules    []string
 	RulesFile         string
 	Transformer       metricfamily.Transformer
 
@@ -89,9 +91,10 @@ type Worker struct {
 	from       *url.URL
 	to         *url.URL
 
-	interval    time.Duration
-	transformer metricfamily.Transformer
-	rules       []string
+	interval       time.Duration
+	transformer    metricfamily.Transformer
+	rules          []string
+	recordingRules []string
 
 	lastMetrics []*clientmodel.MetricFamily
 	lock        sync.Mutex
@@ -232,6 +235,19 @@ func New(cfg Config) (*Worker, error) {
 	}
 	w.rules = rules
 
+	// Configure the recording rules.
+	recordingRules := cfg.RecordingRules
+	for i := 0; i < len(recordingRules); {
+		s := strings.TrimSpace(recordingRules[i])
+		if len(s) == 0 {
+			recordingRules = append(recordingRules[:i], recordingRules[i+1:]...)
+			continue
+		}
+		recordingRules[i] = s
+		i++
+	}
+	w.recordingRules = recordingRules
+
 	s, err := status.New(logger)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create StatusReport: %v", err)
@@ -259,6 +275,7 @@ func (w *Worker) Reconfigure(cfg Config) error {
 	w.to = worker.to
 	w.transformer = worker.transformer
 	w.rules = worker.rules
+	w.recordingRules = worker.recordingRules
 
 	// Signal a restart to Run func.
 	// Do this in a goroutine since we do not care if restarting the Run loop is asynchronous.
@@ -302,29 +319,27 @@ func (w *Worker) forward(ctx context.Context) error {
 	defer w.lock.Unlock()
 
 	var families []*clientmodel.MetricFamily
+	var err error
 	if os.Getenv("SIMULATE") == "true" {
 		families = simulator.SimulateMetrics(w.logger)
 	} else {
-		// Load the match rules each time.
-		from := w.from
-
-		// reset query from last invocation, otherwise match rules will be appended
-		w.from.RawQuery = ""
-		v := from.Query()
-		for _, rule := range w.rules {
-			v.Add("match[]", rule)
-		}
-		from.RawQuery = v.Encode()
-
-		req := &http.Request{Method: "GET", URL: from}
-		var err error
-		families, err = w.fromClient.Retrieve(ctx, req)
+		families, err = w.getFederateMetrics(ctx)
 		if err != nil {
 			statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve metrics")
 			if statusErr != nil {
-				rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", err)
+				rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 			}
 			return err
+		}
+
+		rfamilies, err := w.getRecordingMetrics(ctx)
+		if err != nil {
+			statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to retrieve recording metrics")
+			if statusErr != nil {
+				rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
+			}
+		} else {
+			families = append(families, rfamilies...)
 		}
 	}
 
@@ -364,7 +379,7 @@ func (w *Worker) forward(ctx context.Context) error {
 	}
 
 	req := &http.Request{Method: "POST", URL: w.to}
-	err := w.toClient.RemoteWrite(ctx, req, families, w.interval)
+	err = w.toClient.RemoteWrite(ctx, req, families, w.interval)
 	if err != nil {
 		statusErr := w.status.UpdateStatus("Degraded", "Degraded", "Failed to send metrics")
 		if statusErr != nil {
@@ -376,5 +391,72 @@ func (w *Worker) forward(ctx context.Context) error {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
 	}
+
 	return err
+}
+
+func (w *Worker) getFederateMetrics(ctx context.Context) ([]*clientmodel.MetricFamily, error) {
+	var families []*clientmodel.MetricFamily
+	var err error
+
+	// reset query from last invocation, otherwise match rules will be appended
+	from := w.from
+	from.RawQuery = ""
+	v := from.Query()
+	for _, rule := range w.rules {
+		v.Add("match[]", rule)
+	}
+	from.RawQuery = v.Encode()
+
+	req := &http.Request{Method: "GET", URL: from}
+	families, err = w.fromClient.Retrieve(ctx, req)
+	if err != nil {
+		rlogger.Log(w.logger, rlogger.Warn, "msg", "Failed to retrieve metrics", "err", err)
+		return families, err
+	}
+
+	return families, nil
+}
+
+func (w *Worker) getRecordingMetrics(ctx context.Context) ([]*clientmodel.MetricFamily, error) {
+	var families []*clientmodel.MetricFamily
+	var e error
+
+	from := w.from
+	originPath := from.Path
+	from.Path = "/api/v1/query"
+	// Path /api/v1/query is only used in getRecordingMetrics(), reset to origin path before return.
+	defer func() {
+		w.from.Path = originPath
+	}()
+
+	for _, rule := range w.recordingRules {
+		var r map[string]string
+		err := json.Unmarshal(([]byte)(rule), &r)
+		if err != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", "Input error", "err", err)
+			e = err
+			continue
+		}
+		rname := r["name"]
+		rquery := r["query"]
+
+		// reset query from last invocation, otherwise match rules will be appended
+		from.RawQuery = ""
+		v := w.from.Query()
+		v.Add("query", rquery)
+		from.RawQuery = v.Encode()
+
+		req := &http.Request{Method: "GET", URL: from}
+		rfamilies, err := w.fromClient.RetrievRecordingMetrics(ctx, req, rname)
+		if err != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", "Failed to retrieve recording metrics", "err", err)
+			e = err
+			continue
+		} else {
+			families = append(families, rfamilies...)
+		}
+	}
+
+	return families, e
 }
