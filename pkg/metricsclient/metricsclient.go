@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -25,7 +26,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/prompb"
+	"github.com/prometheus/prometheus/promql"
 
 	"github.com/open-cluster-management/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/metrics-collector/pkg/reader"
@@ -73,6 +76,108 @@ func New(logger log.Logger, client *http.Client, maxBytes int64, timeout time.Du
 		metricsName: metricsName,
 		logger:      log.With(logger, "component", "metricsclient"),
 	}
+}
+
+type MetricsJson struct {
+	Status string      `json:"status"`
+	Data   MetricsData `json:"data"`
+}
+
+type MetricsData struct {
+	Type   string          `json:"resultType"`
+	Result []MetricsResult `json:"result"`
+}
+
+type MetricsResult struct {
+	Metric map[string]string `json:"metric"`
+	Value  []interface{}     `json:"value"`
+}
+
+func (c *Client) RetrievRecordingMetrics(ctx context.Context, req *http.Request, name string) ([]*clientmodel.MetricFamily, error) {
+
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	req = req.WithContext(ctx)
+	defer cancel()
+	families := make([]*clientmodel.MetricFamily, 0, 100)
+	err := withCancel(ctx, c.client, req, func(resp *http.Response) error {
+		switch resp.StatusCode {
+		case http.StatusOK:
+			gaugeRequestRetrieve.WithLabelValues(c.metricsName, "200").Inc()
+		case http.StatusUnauthorized:
+			gaugeRequestRetrieve.WithLabelValues(c.metricsName, "401").Inc()
+			return fmt.Errorf("Prometheus server requires authentication: %s", resp.Request.URL)
+		case http.StatusForbidden:
+			gaugeRequestRetrieve.WithLabelValues(c.metricsName, "403").Inc()
+			return fmt.Errorf("Prometheus server forbidden: %s", resp.Request.URL)
+		case http.StatusBadRequest:
+			gaugeRequestRetrieve.WithLabelValues(c.metricsName, "400").Inc()
+			return fmt.Errorf("bad request: %s", resp.Request.URL)
+		default:
+			gaugeRequestRetrieve.WithLabelValues(c.metricsName, strconv.Itoa(resp.StatusCode)).Inc()
+			return fmt.Errorf("Prometheus server reported unexpected error code: %d", resp.StatusCode)
+		}
+
+		decoder := json.NewDecoder(resp.Body)
+		var data MetricsJson
+		err := decoder.Decode(&data)
+		if err != nil {
+			logger.Log(c.logger, logger.Error, "msg", "failed to decode", "err", err)
+			return nil
+		}
+		vec := make(promql.Vector, 0, 100)
+		for _, r := range data.Data.Result {
+			var t int64
+			var v float64
+			t = int64(r.Value[0].(float64) * 1000)
+			v, _ = strconv.ParseFloat(r.Value[1].(string), 64)
+			ls := []labels.Label{}
+			for k, v := range r.Metric {
+				l := &labels.Label{
+					Name:  k,
+					Value: v,
+				}
+				ls = append(ls, *l)
+			}
+			vec = append(vec, promql.Sample{
+				Metric: ls,
+				Point:  promql.Point{T: t, V: v},
+			})
+		}
+
+		for _, s := range vec {
+			protMetric := &clientmodel.Metric{
+				Untyped: &clientmodel.Untyped{},
+			}
+			protMetricFam := &clientmodel.MetricFamily{
+				Type: clientmodel.MetricType_UNTYPED.Enum(),
+				Name: proto.String(name),
+			}
+			for _, l := range s.Metric {
+				if l.Value == "" {
+					// No value means unset. Never consider those labels.
+					// This is also important to protect against nameless metrics.
+					continue
+				}
+				protMetric.Label = append(protMetric.Label, &clientmodel.LabelPair{
+					Name:  proto.String(l.Name),
+					Value: proto.String(l.Value),
+				})
+			}
+
+			protMetric.TimestampMs = proto.Int64(s.T)
+			protMetric.Untyped.Value = proto.Float64(s.V)
+
+			protMetricFam.Metric = append(protMetricFam.Metric, protMetric)
+			families = append(families, protMetricFam)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return families, nil
 }
 
 func (c *Client) Retrieve(ctx context.Context, req *http.Request) ([]*clientmodel.MetricFamily, error) {
@@ -124,6 +229,7 @@ func (c *Client) Retrieve(ctx context.Context, req *http.Request) ([]*clientmode
 	if err != nil {
 		return nil, err
 	}
+
 	return families, nil
 }
 

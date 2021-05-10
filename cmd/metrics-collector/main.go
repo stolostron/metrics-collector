@@ -55,6 +55,7 @@ func main() {
 
 	// TODO: more complex input definition, such as a JSON struct
 	cmd.Flags().StringArrayVar(&opt.Rules, "match", opt.Rules, "Match rules to federate.")
+	cmd.Flags().StringArrayVar(&opt.RecordingRules, "recordingrule", opt.RecordingRules, "Define recording rule is to generate new metrics based on specified query expression.")
 	cmd.Flags().StringVar(&opt.RulesFile, "match-file", opt.RulesFile, "A file containing match rules to federate, one rule per line.")
 
 	cmd.Flags().StringSliceVar(&opt.LabelFlag, "label", opt.LabelFlag, "Labels to add to each outgoing metric, in key=value form.")
@@ -110,8 +111,9 @@ type Options struct {
 	AnonymizeSalt     string
 	AnonymizeSaltFile string
 
-	Rules     []string
-	RulesFile string
+	Rules          []string
+	RecordingRules []string
+	RulesFile      string
 
 	LabelFlag []string
 	Labels    map[string]string
@@ -218,6 +220,7 @@ func (o *Options) Run() error {
 		Interval:          o.Interval,
 		LimitBytes:        o.LimitBytes,
 		Rules:             o.Rules,
+		RecordingRules:    o.RecordingRules,
 		RulesFile:         o.RulesFile,
 		Transformer:       transformer,
 
