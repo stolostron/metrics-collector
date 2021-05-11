@@ -4,10 +4,11 @@ package simulator
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
+	"math/big"
 	"os"
 	"strconv"
 	"strings"
@@ -55,7 +56,7 @@ func SimulateMetrics(logger log.Logger) []*clientmodel.MetricFamily {
 			}
 		}
 		sb.WriteString("} ")
-		sb.WriteString(fmt.Sprintf("%f %d", rand.Float64(), timestamp))
+		sb.WriteString(fmt.Sprintf("%f %d", randFloat64(), timestamp))
 		sb.WriteString("\n")
 	}
 	//rlogger.Log(logger, rlogger.Error, "data", sb.String())
@@ -73,4 +74,13 @@ func SimulateMetrics(logger log.Logger) []*clientmodel.MetricFamily {
 	}
 
 	return families
+}
+
+func randFloat64() float64 {
+	nBig, err := rand.Int(rand.Reader, big.NewInt(1<<62))
+	if err != nil {
+		return 0
+	}
+
+	return (float64(nBig.Int64()) / float64(1<<62))
 }
