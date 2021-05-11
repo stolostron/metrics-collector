@@ -73,6 +73,9 @@ func main() {
 	// deprecated opt
 	cmd.Flags().StringVar(&opt.Identifier, "id", opt.Identifier, "The unique identifier for metrics sent with this client.")
 
+	//simulation test
+	cmd.Flags().StringVar(&opt.SimulatedTimeseriesFile, "simulated-timeseries-file", opt.SimulatedTimeseriesFile, "A file containing the sample of timeseries.")
+
 	l := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	lvl, err := cmd.Flags().GetString("log-level")
 	if err != nil {
@@ -125,6 +128,9 @@ type Options struct {
 
 	// deprecated
 	Identifier string
+
+	// simulation file
+	SimulatedTimeseriesFile string
 }
 
 func (o *Options) Run() error {
@@ -224,7 +230,8 @@ func (o *Options) Run() error {
 		RulesFile:         o.RulesFile,
 		Transformer:       transformer,
 
-		Logger: o.Logger,
+		Logger:                  o.Logger,
+		SimulatedTimeseriesFile: o.SimulatedTimeseriesFile,
 	}
 
 	worker, err := forwarder.New(cfg)

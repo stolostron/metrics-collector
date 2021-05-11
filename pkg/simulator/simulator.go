@@ -84,3 +84,24 @@ func randFloat64() float64 {
 
 	return (float64(nBig.Int64()) / float64(1<<62))
 }
+
+func FetchSimulatedTimeseries(timeseriesFile string) ([]*clientmodel.MetricFamily, error) {
+
+	reader, err := os.Open(timeseriesFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var parser expfmt.TextParser
+
+	parsed, err := parser.TextToMetricFamilies(reader)
+	if err != nil {
+		return nil, err
+	}
+	var families []*clientmodel.MetricFamily
+	for _, mf := range parsed {
+		families = append(families, mf)
+
+	}
+	return families, nil
+}
