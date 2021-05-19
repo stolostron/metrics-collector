@@ -31,6 +31,9 @@ vendor:
 $(BIN_DIR):
 	mkdir -p $@
 
+$(GOJSONTOYAML_BIN): $(BIN_DIR)
+	GOBIN=$(BIN_DIR) go get github.com/brancz/gojsontoyaml
+
 $(METRICS_JSON): $(GOJSONTOYAML_BIN)
 	matches=`curl -L https://raw.githubusercontent.com/open-cluster-management/multicluster-observability-operator/main/manifests/base/config/metrics_allowlist.yaml | \
 	    $(GOJSONTOYAML_BIN) --yamltojson | jq -r '.data."metrics_list.yaml"' | $(GOJSONTOYAML_BIN) --yamltojson | jq -r '.matches' | jq '"{" + .[] + "}"'`; \
@@ -38,8 +41,7 @@ $(METRICS_JSON): $(GOJSONTOYAML_BIN)
 	    $(GOJSONTOYAML_BIN) --yamltojson | jq -r '.data."metrics_list.yaml"' | $(GOJSONTOYAML_BIN) --yamltojson | jq -r '.names' | jq '"{__name__=\"" + .[] + "\"}"'`; \
 	echo $$matches $$names | jq -s . > $@
 
-
-test/timeseries.txt:
+test/timeseries.txt: $(METRICS_JSON)
 	oc port-forward -n openshift-monitoring prometheus-k8s-0 9090 > /dev/null & \
 	sleep 50 ; \
 	query="curl --fail --silent -G http://localhost:9090/federate"; \
@@ -49,6 +51,3 @@ test/timeseries.txt:
 	echo '# This file was generated using `make $@`.' > $@ ; \
 	$$query >> $@ ; \
 	jobs -p | xargs -r kill
-
-$(GOJSONTOYAML_BIN): $(BIN_DIR)
-	GOBIN=$(BIN_DIR) go get github.com/brancz/gojsontoyaml
