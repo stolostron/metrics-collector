@@ -3,10 +3,8 @@
 # Copyright Contributors to the Open Cluster Management project
 
 WORKDIR="$(pwd -P)"
+METRICS_IMG="quay.io/haoqing/metrics-data:latest"
 export PATH=${PATH}:${WORKDIR}
-
-# generate timeseries file
-make test/timeseries.txt -f $WORKDIR/../../Makefile.prow
 
 if ! command -v jq &> /dev/null; then
 	if [[ "$(uname)" == "Linux" ]]; then
@@ -51,18 +49,29 @@ do
 	kubectl -n ${cluster_name} patch secret observability-managed-cluster-certs --type='json' -p='[{"op": "replace", "path": "/metadata/ownerReferences", "value": []}]'
 	kubectl -n ${cluster_name} patch sa endpoint-observability-operator-sa --type='json' -p='[{"op": "replace", "path": "/metadata/ownerReferences", "value": []}]'
 
-	# create configmap
-
 	# deploy metrics collector deployment to cluster ns
-	deploy_yaml_file=${cluster_name}-metrics-collector-deployment.yaml
-	kubectl get deploy metrics-collector-deployment -n open-cluster-management-addon-observability -o yaml > $deploy_yaml_file
-	$sed_command "s~cluster=.*$~cluster=${cluster_name}\"~g" "$deploy_yaml_file"
-	$sed_command "s~clusterID=.*$~clusterID=$(cat /proc/sys/kernel/random/uuid)\"~g" "$deploy_yaml_file"
-	$sed_command "s~namespace:\ open-cluster-management-addon-observability~namespace:\ ${cluster_name}~g" "$deploy_yaml_file"
-	cat "$deploy_yaml_file" | kubectl -n ${cluster_name} apply -f -
-	rm -rf "$deploy_yaml_file"
-	kubectl -n ${cluster_name} patch deploy metrics-collector-deployment --type='json' -p='[{"op": "replace", "path": "/metadata/ownerReferences", "value": []}]'
+	deploy_yaml_file=${cluster_name}-metrics-collector-deployment.json
+	kubectl get deploy metrics-collector-deployment -n open-cluster-management-addon-observability -o json > $deploy_yaml_file
 
+	# replace namespace, cluster and clusterID. Insert --simulated-timeseries-file
+        uuid=$(cat /proc/sys/kernel/random/uuid)
+        jq \
+        --arg cluster_name $cluster_name \
+        --arg cluster "--label=\"cluster=$cluster_name\"" \
+        --arg clusterID "--label=\"clusterID=$uuid\"" \
+        --arg file "--simulated-timeseries-file=/metrics-volume/timeseries.txt" \
+        '.metadata.namespace=$cluster_name | .spec.template.spec.containers[0].command[.spec.template.spec.containers[0].command|length] |= . + $cluster |.spec.template.spec.containers[0].command[.spec.template.spec.containers[0].command|length] |= . + $clusterID | .spec.template.spec.containers[0].command[.spec.template.spec.containers[0].command|length] |= . + $file' $deploy_yaml_file > $deploy_yaml_file.tmp && mv $deploy_yaml_file.tmp $deploy_yaml_file
+
+	# insert metrics initContainer
+        jq \
+        --argjson init '{"initContainers": [{"command":["sh","-c","cp /tmp/timeseries.txt /metrics-volume"],"image":"'$METRICS_IMG'","imagePullPolicy":"Always","name":"init-metrics","volumeMounts":[{"mountPath":"/metrics-volume","name":"metrics-volume"}]}]}' \
+        --argjson emptydir '{"emptyDir": {}, "name": "metrics-volume"}' \
+        --argjson metricsdir '{"mountPath": "/metrics-volume","name": "metrics-volume"}' \
+        '.spec.template.spec += $init | .spec.template.spec.volumes += [$emptydir] | .spec.template.spec.containers[0].volumeMounts += [$metricsdir]' $deploy_yaml_file > $deploy_yaml_file.tmp && mv $deploy_yaml_file.tmp $deploy_yaml_file
+
+	cat "$deploy_yaml_file" | kubectl -n ${cluster_name} apply -f -
+	rm -rf "$deploy_yaml_file" "$deploy_yaml_file".tmp
+	kubectl -n ${cluster_name} patch deploy metrics-collector-deployment --type='json' -p='[{"op": "replace", "path": "/metadata/ownerReferences", "value": []}]'
 
 	# deploy ClusterRoleBinding for read metrics from OCP prometheus
 	rolebinding_yaml_file=${cluster_name}-metrics-collector-view.yaml
