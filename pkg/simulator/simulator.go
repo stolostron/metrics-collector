@@ -86,6 +86,7 @@ func randFloat64() float64 {
 }
 
 func FetchSimulatedTimeseries(timeseriesFile string) ([]*clientmodel.MetricFamily, error) {
+	timestamp := time.Now().UnixNano() / int64(time.Millisecond)
 
 	reader, err := os.Open(timeseriesFile)
 	if err != nil {
@@ -100,8 +101,10 @@ func FetchSimulatedTimeseries(timeseriesFile string) ([]*clientmodel.MetricFamil
 	}
 	var families []*clientmodel.MetricFamily
 	for _, mf := range parsed {
+		for _, m := range mf.Metric {
+			m.TimestampMs = &timestamp
+		}
 		families = append(families, mf)
-
 	}
 	return families, nil
 }

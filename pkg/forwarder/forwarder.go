@@ -325,7 +325,10 @@ func (w *Worker) forward(ctx context.Context) error {
 	var families []*clientmodel.MetricFamily
 	var err error
 	if w.simulatedTimeseriesFile != "" {
-		families, _ = simulator.FetchSimulatedTimeseries(w.simulatedTimeseriesFile)
+		families, err = simulator.FetchSimulatedTimeseries(w.simulatedTimeseriesFile)
+		if err != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", "failed fetch simulated timeseries", "err", err)
+		}
 	} else if os.Getenv("SIMULATE") == "true" {
 		families = simulator.SimulateMetrics(w.logger)
 	} else {
@@ -391,7 +394,7 @@ func (w *Worker) forward(ctx context.Context) error {
 		if statusErr != nil {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
-	} else {
+	} else if w.simulatedTimeseriesFile == "" {
 		statusErr := w.status.UpdateStatus("Available", "Available", "Send metrics successfully")
 		if statusErr != nil {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
