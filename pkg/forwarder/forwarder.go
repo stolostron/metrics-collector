@@ -386,7 +386,7 @@ func (w *Worker) forward(ctx context.Context) error {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
 	} else {
-		statusErr := w.status.UpdateStatus("Available", "Available", "Send metrics successfully")
+		statusErr := w.status.UpdateStatus("Available", "Available", "Cluster metrics sent successfully")
 		if statusErr != nil {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
