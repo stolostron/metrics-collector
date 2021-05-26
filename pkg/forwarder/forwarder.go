@@ -79,7 +79,8 @@ type Config struct {
 	RulesFile         string
 	Transformer       metricfamily.Transformer
 
-	Logger log.Logger
+	Logger                  log.Logger
+	SimulatedTimeseriesFile string
 }
 
 // Worker represents a metrics forwarding agent. It collects metrics from a source URL and forwards them to a sink.
@@ -101,6 +102,8 @@ type Worker struct {
 	reconfigure chan struct{}
 
 	logger log.Logger
+
+	simulatedTimeseriesFile string
 
 	status status.StatusReport
 }
@@ -196,11 +199,12 @@ func New(cfg Config) (*Worker, error) {
 	logger := log.With(cfg.Logger, "component", "forwarder")
 	rlogger.Log(logger, rlogger.Warn, "msg", cfg.ToUpload)
 	w := Worker{
-		from:        cfg.From,
-		interval:    cfg.Interval,
-		reconfigure: make(chan struct{}),
-		to:          cfg.ToUpload,
-		logger:      log.With(cfg.Logger, "component", "forwarder/worker"),
+		from:                    cfg.From,
+		interval:                cfg.Interval,
+		reconfigure:             make(chan struct{}),
+		to:                      cfg.ToUpload,
+		logger:                  log.With(cfg.Logger, "component", "forwarder/worker"),
+		simulatedTimeseriesFile: cfg.SimulatedTimeseriesFile,
 	}
 
 	if w.interval == 0 {
@@ -320,7 +324,12 @@ func (w *Worker) forward(ctx context.Context) error {
 
 	var families []*clientmodel.MetricFamily
 	var err error
-	if os.Getenv("SIMULATE") == "true" {
+	if w.simulatedTimeseriesFile != "" {
+		families, err = simulator.FetchSimulatedTimeseries(w.simulatedTimeseriesFile)
+		if err != nil {
+			rlogger.Log(w.logger, rlogger.Warn, "msg", "failed fetch simulated timeseries", "err", err)
+		}
+	} else if os.Getenv("SIMULATE") == "true" {
 		families = simulator.SimulateMetrics(w.logger)
 	} else {
 		families, err = w.getFederateMetrics(ctx)
@@ -385,7 +394,7 @@ func (w *Worker) forward(ctx context.Context) error {
 		if statusErr != nil {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
 		}
-	} else {
+	} else if w.simulatedTimeseriesFile == "" {
 		statusErr := w.status.UpdateStatus("Available", "Available", "Cluster metrics sent successfully")
 		if statusErr != nil {
 			rlogger.Log(w.logger, rlogger.Warn, "msg", failedStatusReportMsg, "err", statusErr)
