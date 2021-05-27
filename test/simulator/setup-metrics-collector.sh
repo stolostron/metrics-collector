@@ -2,8 +2,8 @@
 # Copyright (c) 2021 Red Hat, Inc.
 # Copyright Contributors to the Open Cluster Management project
 
+METRICS_IMAGE="${METRICS_IMAGE:-quay.io/haoqing/metrics-data:latest}"
 WORKDIR="$(pwd -P)"
-METRICS_IMG="quay.io/haoqing/metrics-data:latest"
 export PATH=${PATH}:${WORKDIR}
 
 if ! command -v jq &> /dev/null; then
@@ -64,7 +64,7 @@ do
 
 	# insert metrics initContainer
         jq \
-        --argjson init '{"initContainers": [{"command":["sh","-c","cp /tmp/timeseries.txt /metrics-volume"],"image":"'$METRICS_IMG'","imagePullPolicy":"Always","name":"init-metrics","volumeMounts":[{"mountPath":"/metrics-volume","name":"metrics-volume"}]}]}' \
+        --argjson init '{"initContainers": [{"command":["sh","-c","cp /tmp/timeseries.txt /metrics-volume"],"image":"'$METRICS_IMAGE'","imagePullPolicy":"Always","name":"init-metrics","volumeMounts":[{"mountPath":"/metrics-volume","name":"metrics-volume"}]}]}' \
         --argjson emptydir '{"emptyDir": {}, "name": "metrics-volume"}' \
         --argjson metricsdir '{"mountPath": "/metrics-volume","name": "metrics-volume"}' \
         '.spec.template.spec += $init | .spec.template.spec.volumes += [$emptydir] | .spec.template.spec.containers[0].volumeMounts += [$metricsdir]' $deploy_yaml_file > $deploy_yaml_file.tmp && mv $deploy_yaml_file.tmp $deploy_yaml_file
