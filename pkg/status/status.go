@@ -33,9 +33,12 @@ type StatusReport struct {
 
 func New(logger log.Logger) (*StatusReport, error) {
 	testMode := os.Getenv("UNIT_TEST") != ""
+	standaloneMode := os.Getenv("STANDALONE") == "true"
 	var kubeClient client.Client
 	if testMode {
 		kubeClient = fake.NewFakeClient()
+	} else if standaloneMode {
+		kubeClient = nil
 	} else {
 		config, err := clientcmd.BuildConfigFromFlags("", "")
 		if err != nil {
@@ -58,6 +61,9 @@ func New(logger log.Logger) (*StatusReport, error) {
 }
 
 func (s *StatusReport) UpdateStatus(t string, r string, m string) error {
+	if s.statusClient == nil {
+		return nil
+	}
 	addon := &oav1beta1.ObservabilityAddon{}
 	err := s.statusClient.Get(context.TODO(), types.NamespacedName{
 		Name:      name,

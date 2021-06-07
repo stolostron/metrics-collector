@@ -47,4 +47,18 @@ RUN microdnf update &&\
     microdnf clean all
 
 COPY --from=builder /go/src/github.com/open-cluster-management/metrics-collector/metrics-collector /usr/bin/
+
 RUN cp /usr/bin/metrics-collector /usr/bin/telemeter-client
+
+# standalone required parameters
+ENV FROM
+ENV FROM_CA_FILE
+ENV FROM_TOKEN
+ENV TO_UPLOAD
+ENV TENANT_ID
+ENV CLUSTER_ID
+ENV CLUSTER_NAME
+ENV INTERVAL
+ENV MATCH_FILE
+
+CMD ["/usr/bin/metrics-collector", "--from ${FROM} --from-ca-file ${FROM_CA_FILE} --from-token ${FROM_TOKEN} --to-upload ${TO_UPLOAD} --id ${TENANT_ID} --label=\"cluster=${CLUSTER_NAME}\" --label=\"clusterID=${CLUSTER_ID}\"  --match-file=${MATCH_FILE} --interval=${INTERVAL}"]
