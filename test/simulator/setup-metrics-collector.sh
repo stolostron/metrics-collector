@@ -72,6 +72,7 @@ do
 	cat "$deploy_yaml_file" | kubectl -n ${cluster_name} apply -f -
 	rm -rf "$deploy_yaml_file" "$deploy_yaml_file".tmp
 	kubectl -n ${cluster_name} patch deploy metrics-collector-deployment --type='json' -p='[{"op": "replace", "path": "/metadata/ownerReferences", "value": []}]'
+	kubectl -n ${cluster_name} patch deploy metrics-collector-deployment --type='json' -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/resources"}]'
 
 	# deploy ClusterRoleBinding for read metrics from OCP prometheus
 	rolebinding_yaml_file=${cluster_name}-metrics-collector-view.yaml
