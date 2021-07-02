@@ -227,9 +227,8 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
                     name="{}-clusters-metrics-collector-view".format(
                         clusterName))
             except ApiException as err:
-                print("a", err.status)
-                if err.status != 404:
-                    return err
+                print("failed to delete ClusterRoleBinding for {}, err: {}",
+                      clusterName, err)
 
             try:
                 deploymentAPI = hubClient.resources.get(api_version="apps/v1",
@@ -238,8 +237,8 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
                 deploymentAPI.delete(name="metrics-collector-deployment",
                                      namespace=clusterName)
             except ApiException as err:
-                if err.status != 404:
-                    return err
+                print("failed to delete deployment for {}, err: {}",
+                      clusterName, err)
 
             try:
                 serviceAccountAPI = hubClient.resources.get(
@@ -249,19 +248,8 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
                     name="endpoint-observability-operator-sa",
                     namespace=clusterName)
             except ApiException as err:
-                if err.status != 404:
-                    return err
-
-            try:
-                serviceAccountAPI = hubClient.resources.get(
-                    api_version="v1", kind="ServiceAccount")
-
-                serviceAccountAPI.delete(
-                    name="endpoint-observability-operator-sa",
-                    namespace=clusterName)
-            except ApiException as err:
-                if err.status != 404:
-                    return err
+                print("failed to delete serviceaccount for {}, err: {}",
+                      clusterName, err)
 
             secretAPI = hubClient.resources.get(api_version="v1",
                                                 kind="Secret")
@@ -271,15 +259,17 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
                     "observability-controller-open-cluster-management.io-observability-signer-client-cert",
                     namespace=clusterName)
             except ApiException as err:
-                if err.status != 404:
-                    return err
+                print(
+                    "failed to delete signer client cert secret for {}, err: {}",
+                    clusterName, err)
 
             try:
                 secretAPI.delete(name="observability-managed-cluster-certs",
                                  namespace=clusterName)
             except ApiException as err:
-                if err.status != 404:
-                    return err
+                print(
+                    "failed to delete managed cluster cert secret for {}, err: {}",
+                    clusterName, err)
 
             try:
                 configMapAPI = hubClient.resources.get(api_version="v1",
@@ -288,8 +278,8 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
                     name="metrics-collector-serving-certs-ca-bundle",
                     namespace=clusterName)
             except ApiException as err:
-                if err.status != 404:
-                    return err
+                print("failed to delete cert ca bundle for {}, err: {}",
+                      clusterName, err)
 
     return None
 
