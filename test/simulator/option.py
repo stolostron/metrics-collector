@@ -15,6 +15,9 @@ def NewOption() -> configargparse.ArgumentParser:
 
     p.add('--hub-config', help='hub cluster kubeconfig', env_var='KUBECONFIG')
     p.add('--prefix', help='managed cluster to process', default="spoke")
+    p.add('--log-file',
+          help='log file for this script',
+          default="/tmp/observability-simulator.log")
     p.add('--clean', help='clean up the simulators', default=False)
 
     options = p.parse_args()
