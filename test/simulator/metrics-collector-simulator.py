@@ -207,7 +207,70 @@ def runSimulaterAt(hubClient: dynamic.DynamicClient,
 
 
 def removeSimulator(hubClient: dynamic.DynamicClient,
-                    clusterNamePrefix: str) -> ApiException:
+                    clusterName: str) -> ApiException:
+    try:
+        clusterRoleBindingAPI = hubClient.resources.get(
+            api_version="rbac.authorization.k8s.io/v1",
+            kind="ClusterRoleBinding")
+
+        clusterRoleBindingAPI.delete(
+            name="{}-clusters-metrics-collector-view".format(clusterName))
+    except ApiException as err:
+        print("failed to delete ClusterRoleBinding for {}, err: {}:{}".format(
+            clusterName, err.status, err.reason))
+
+    try:
+        deploymentAPI = hubClient.resources.get(api_version="apps/v1",
+                                                kind="Deployment")
+
+        deploymentAPI.delete(name="metrics-collector-deployment",
+                             namespace=clusterName)
+    except ApiException as err:
+        print("failed to delete deployment for {}, err: {}:{}".format(
+            clusterName, err.status, err.reason))
+
+    try:
+        serviceAccountAPI = hubClient.resources.get(api_version="v1",
+                                                    kind="ServiceAccount")
+
+        serviceAccountAPI.delete(name="endpoint-observability-operator-sa",
+                                 namespace=clusterName)
+    except ApiException as err:
+        print("failed to delete serviceaccount for {}, err: {}:{}".format(
+            clusterName, err.status, err.reason))
+
+    secretAPI = hubClient.resources.get(api_version="v1", kind="Secret")
+    try:
+        secretAPI.delete(
+            name=
+            "observability-controller-open-cluster-management.io-observability-signer-client-cert",
+            namespace=clusterName)
+    except ApiException as err:
+        print("failed to delete signer client cert secret for {}, err: {}:{}".
+              format(clusterName, err.status, err.reason))
+
+    try:
+        secretAPI.delete(name="observability-managed-cluster-certs",
+                         namespace=clusterName)
+    except ApiException as err:
+        print(
+            "failed to delete managed cluster cert secret for {}, err: {}:{}".
+            format(clusterName, err.status, err.reason))
+
+    try:
+        configMapAPI = hubClient.resources.get(api_version="v1",
+                                               kind="ConfigMap")
+        configMapAPI.delete(name="metrics-collector-serving-certs-ca-bundle",
+                            namespace=clusterName)
+    except ApiException as err:
+        print("failed to delete cert ca bundle for {}, err: {}:{}".format(
+            clusterName, err.status, err.reason))
+
+    return None
+
+
+def removeSimulators(hubClient: dynamic.DynamicClient,
+                     clusterNamePrefix: str) -> ApiException:
     groupVersion = "cluster.open-cluster-management.io/v1"
     kind = "ManagedCluster"
     managedClusterAPI = hubClient.resources.get(api_version=groupVersion,
@@ -218,68 +281,10 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
     for item in clusterList.items:
         clusterName = item.metadata.name
         if clusterName.startswith(clusterNamePrefix):
-            try:
-                clusterRoleBindingAPI = hubClient.resources.get(
-                    api_version="rbac.authorization.k8s.io/v1",
-                    kind="ClusterRoleBinding")
-
-                clusterRoleBindingAPI.delete(
-                    name="{}-clusters-metrics-collector-view".format(
-                        clusterName))
-            except ApiException as err:
-                print("failed to delete ClusterRoleBinding for {}, err: {}",
-                      clusterName, err)
-
-            try:
-                deploymentAPI = hubClient.resources.get(api_version="apps/v1",
-                                                        kind="Deployment")
-
-                deploymentAPI.delete(name="metrics-collector-deployment",
-                                     namespace=clusterName)
-            except ApiException as err:
-                print("failed to delete deployment for {}, err: {}",
-                      clusterName, err)
-
-            try:
-                serviceAccountAPI = hubClient.resources.get(
-                    api_version="v1", kind="ServiceAccount")
-
-                serviceAccountAPI.delete(
-                    name="endpoint-observability-operator-sa",
-                    namespace=clusterName)
-            except ApiException as err:
-                print("failed to delete serviceaccount for {}, err: {}",
-                      clusterName, err)
-
-            secretAPI = hubClient.resources.get(api_version="v1",
-                                                kind="Secret")
-            try:
-                secretAPI.delete(
-                    name=
-                    "observability-controller-open-cluster-management.io-observability-signer-client-cert",
-                    namespace=clusterName)
-            except ApiException as err:
-                print(
-                    "failed to delete signer client cert secret for {}, err: {}",
-                    clusterName, err)
-
-            try:
-                secretAPI.delete(name="observability-managed-cluster-certs",
-                                 namespace=clusterName)
-            except ApiException as err:
-                print(
-                    "failed to delete managed cluster cert secret for {}, err: {}",
-                    clusterName, err)
-
-            try:
-                configMapAPI = hubClient.resources.get(api_version="v1",
-                                                       kind="ConfigMap")
-                configMapAPI.delete(
-                    name="metrics-collector-serving-certs-ca-bundle",
-                    namespace=clusterName)
-            except ApiException as err:
-                print("failed to delete cert ca bundle for {}, err: {}",
-                      clusterName, err)
+            print("deleting resources on cluster {}".format(clusterName))
+            err = removeSimulator(hubClient, clusterName)
+            if err != None:
+                print(err)
 
     return None
 
@@ -303,12 +308,23 @@ def watchManagedClusters(hubClient: dynamic.DynamicClient,
         if e['type'] == "ADDED":
             clusterName = e['object'].metadata.name
 
-            if not clusterName.startswith(
-                    clusterNamePrefix) or clusterName in set:
+            if clusterName in set:
+                continue
+            if len(clusterNamePrefix) != 0 and not clusterName.startswith(
+                    clusterNamePrefix):
                 continue
 
             set[clusterName] = True
             err = runSimulaterAt(hubClient, clusterName)
+            if err != None:
+                print("failed to create simulator for cluster: {}, err: {}".
+                      format(clusterName, err))
+
+        if e['type'] == "DELETED":
+            if len(clusterNamePrefix) != 0 and not clusterName.startswith(
+                    clusterNamePrefix):
+                continue
+            err = removeSimulator(hubClient, clusterName)
             if err != None:
                 print("failed to create simulator for cluster: {}, err: {}".
                       format(clusterName, err))
@@ -323,15 +339,13 @@ def isObservabilityAddonEnabled(hubClient: dynamic.DynamicClient) -> bool:
 
 if __name__ == '__main__':
     opts = option.NewOption()
-
-    clusterPrefix = "spoke"
-
+    print("prefix {}".format(opts))
     hubClient = dynamic.DynamicClient(
         api_client.ApiClient(configuration=config.load_kube_config(
             config_file=opts.hub_config)))
 
     if opts.clean:
-        err = removeSimulator(hubClient, clusterPrefix)
+        err = removeSimulators(hubClient, opts.prefix)
         if err != None:
             print("failed to clean up the simulators, err {}", err)
             exit(1)
@@ -341,5 +355,6 @@ if __name__ == '__main__':
         print("Observability Addon is not up, won't be get Obs cert template")
         exit(1)
 
-# watch the managedcluster CR and create observability simlutor in the managed cluster namespace
-    watchManagedClusters(hubClient, clusterPrefix)
+    # watch the managedcluster CR and create observability simlutor in the managed cluster namespace
+    print("prefix {}".format(opts.prefix))
+    watchManagedClusters(hubClient, opts.prefix)
