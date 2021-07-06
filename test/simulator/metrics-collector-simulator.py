@@ -363,5 +363,6 @@ if __name__ == '__main__':
             "Observability Addon is not up, won't be get Obs cert template")
         exit(1)
 
-    # watch the managedcluster CR and create observability simlutor in the managed cluster namespace
+    # watch the managedcluster CR and create observability simlutor in the managed
+    # cluster namespace
     watchManagedClusters(hubClient, opts.prefix)
