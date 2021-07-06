@@ -364,5 +364,5 @@ if __name__ == '__main__':
         exit(1)
 
     # watch the managedcluster CR and create observability simlutor in the managed
-    # cluster namespace
+    # clusters namespace
     watchManagedClusters(hubClient, opts.prefix)
