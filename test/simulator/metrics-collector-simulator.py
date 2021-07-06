@@ -1,6 +1,7 @@
 import option
 import datetime as dt
 import uuid
+import logging
 from kubernetes import config, dynamic, watch    # type: ignore
 from kubernetes.client import api_client    # type: ignore
 
@@ -128,7 +129,6 @@ def reuseAddonDeployment(hubClient: dynamic.DynamicClient,
         })
 
         deploy.spec.template.spec.containers[0].resources = None
-        print(deploy.spec.template.spec.containers[0].resources)
         deploymentAPI.create(body=resetObject(deploy, clusterName))
     except ApiException as err:
         if err.status != 409:
@@ -216,8 +216,8 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
         clusterRoleBindingAPI.delete(
             name="{}-clusters-metrics-collector-view".format(clusterName))
     except ApiException as err:
-        print("failed to delete ClusterRoleBinding for {}, err: {}:{}".format(
-            clusterName, err.status, err.reason))
+        logging.error("failed to delete ClusterRoleBinding for %s, err: %s:%s",
+                      clusterName, err.status, err.reason)
 
     try:
         deploymentAPI = hubClient.resources.get(api_version="apps/v1",
@@ -226,8 +226,8 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
         deploymentAPI.delete(name="metrics-collector-deployment",
                              namespace=clusterName)
     except ApiException as err:
-        print("failed to delete deployment for {}, err: {}:{}".format(
-            clusterName, err.status, err.reason))
+        logging.error("failed to delete deployment for %s, err: %s:%s",
+                      clusterName, err.status, err.reason)
 
     try:
         serviceAccountAPI = hubClient.resources.get(api_version="v1",
@@ -236,8 +236,8 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
         serviceAccountAPI.delete(name="endpoint-observability-operator-sa",
                                  namespace=clusterName)
     except ApiException as err:
-        print("failed to delete serviceaccount for {}, err: {}:{}".format(
-            clusterName, err.status, err.reason))
+        logging.error("failed to delete serviceaccount for %s, err: %s:%s",
+                      clusterName, err.status, err.reason)
 
     secretAPI = hubClient.resources.get(api_version="v1", kind="Secret")
     try:
@@ -246,16 +246,17 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
             "observability-controller-open-cluster-management.io-observability-signer-client-cert",
             namespace=clusterName)
     except ApiException as err:
-        print("failed to delete signer client cert secret for {}, err: {}:{}".
-              format(clusterName, err.status, err.reason))
+        logging.error(
+            "failed to delete signer client cert secret for %s, err: %s:%s",
+            clusterName, err.status, err.reason)
 
     try:
         secretAPI.delete(name="observability-managed-cluster-certs",
                          namespace=clusterName)
     except ApiException as err:
-        print(
-            "failed to delete managed cluster cert secret for {}, err: {}:{}".
-            format(clusterName, err.status, err.reason))
+        logging.error(
+            "failed to delete managed cluster cert secret for %s, err: %s:%s",
+            clusterName, err.status, err.reason)
 
     try:
         configMapAPI = hubClient.resources.get(api_version="v1",
@@ -263,8 +264,8 @@ def removeSimulator(hubClient: dynamic.DynamicClient,
         configMapAPI.delete(name="metrics-collector-serving-certs-ca-bundle",
                             namespace=clusterName)
     except ApiException as err:
-        print("failed to delete cert ca bundle for {}, err: {}:{}".format(
-            clusterName, err.status, err.reason))
+        logging.error("failed to delete cert ca bundle for %s, err: %s:%s",
+                      clusterName, err.status, err.reason)
 
     return None
 
@@ -281,10 +282,10 @@ def removeSimulators(hubClient: dynamic.DynamicClient,
     for item in clusterList.items:
         clusterName = item.metadata.name
         if clusterName.startswith(clusterNamePrefix):
-            print("deleting resources on cluster {}".format(clusterName))
+            logging.info("deleting resources on cluster %s", clusterName)
             err = removeSimulator(hubClient, clusterName)
             if err != None:
-                print(err)
+                logging.error("failed to remove simulatorm err: %s", err)
 
     return None
 
@@ -298,16 +299,14 @@ def watchManagedClusters(hubClient: dynamic.DynamicClient,
 
     api = hubClient.resources.get(api_version=groupVersion, kind=kind)
 
-    print("start watch: {}/{}".format(groupVersion, kind))
+    logging.info("start watch: %s/%s", groupVersion, kind)
 
     set = {}
 
     for e in api.watch():
-        print(e['type'])
-
+        clusterName = e['object'].metadata.name
+        logging.info("event: %s on cluster %s", e['type'], clusterName)
         if e['type'] == "ADDED":
-            clusterName = e['object'].metadata.name
-
             if clusterName in set:
                 continue
             if len(clusterNamePrefix) != 0 and not clusterName.startswith(
@@ -317,8 +316,9 @@ def watchManagedClusters(hubClient: dynamic.DynamicClient,
             set[clusterName] = True
             err = runSimulaterAt(hubClient, clusterName)
             if err != None:
-                print("failed to create simulator for cluster: {}, err: {}".
-                      format(clusterName, err))
+                logging.error(
+                    "failed to create simulator for cluster: %s, err: %s",
+                    clusterName, err)
 
         if e['type'] == "DELETED":
             if len(clusterNamePrefix) != 0 and not clusterName.startswith(
@@ -326,8 +326,9 @@ def watchManagedClusters(hubClient: dynamic.DynamicClient,
                 continue
             err = removeSimulator(hubClient, clusterName)
             if err != None:
-                print("failed to create simulator for cluster: {}, err: {}".
-                      format(clusterName, err))
+                logging.error(
+                    "failed to remove simulator for cluster: %s, err: %s",
+                    clusterName, err)
 
 
 def isObservabilityAddonEnabled(hubClient: dynamic.DynamicClient) -> bool:
@@ -339,7 +340,13 @@ def isObservabilityAddonEnabled(hubClient: dynamic.DynamicClient) -> bool:
 
 if __name__ == '__main__':
     opts = option.NewOption()
-    print("prefix {}".format(opts))
+    format = "%(asctime)s: %(message)s"
+    logging.basicConfig(filename=opts.log_file,
+                        filemode='w',
+                        format=format,
+                        level=logging.INFO,
+                        datefmt="%H:%M:%S")
+
     hubClient = dynamic.DynamicClient(
         api_client.ApiClient(configuration=config.load_kube_config(
             config_file=opts.hub_config)))
@@ -347,14 +354,14 @@ if __name__ == '__main__':
     if opts.clean:
         err = removeSimulators(hubClient, opts.prefix)
         if err != None:
-            print("failed to clean up the simulators, err {}", err)
+            logging.error("failed to clean up the simulators, err %s", err)
             exit(1)
         exit(0)
 
     if not isObservabilityAddonEnabled(hubClient):
-        print("Observability Addon is not up, won't be get Obs cert template")
+        logging.error(
+            "Observability Addon is not up, won't be get Obs cert template")
         exit(1)
 
     # watch the managedcluster CR and create observability simlutor in the managed cluster namespace
-    print("prefix {}".format(opts.prefix))
     watchManagedClusters(hubClient, opts.prefix)
