@@ -102,6 +102,16 @@ func FetchSimulatedTimeseries(timeseriesFile string) ([]*clientmodel.MetricFamil
 	var families []*clientmodel.MetricFamily
 	for _, mf := range parsed {
 		for _, m := range mf.Metric {
+			// increase conuter value
+			rate := (float64)(timestamp-*m.TimestampMs) / (float64)(timestamp)
+			if *mf.Type == clientmodel.MetricType_COUNTER {
+				v := *m.Counter.Value * (1 + rate)
+				m.Counter.Value = &v
+			} else if *mf.Type == clientmodel.MetricType_UNTYPED && (strings.HasSuffix(*mf.Name, "_total") || strings.HasSuffix(*mf.Name, "_count") || strings.HasPrefix(*mf.Name, "_counts")) {
+				v := *m.Untyped.Value * (1 + rate)
+				m.Untyped.Value = &v
+			}
+			// update timestamp
 			m.TimestampMs = &timestamp
 		}
 		families = append(families, mf)
