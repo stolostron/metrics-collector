@@ -1,3 +1,5 @@
+> This branch is deprecated. It has been moved to https://github.com/open-cluster-management/multicluster-observability-operator as a sub-package `collectors/metrics`
+
 Metrics Collector
 -----------
 Metrics Collector implements a client to "scrape" or collect data from OpenShift Promethus
