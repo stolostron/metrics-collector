@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/logger"
 	"github.com/open-cluster-management/multicluster-monitoring-operator/pkg/apis"
 	oav1beta1 "github.com/open-cluster-management/multicluster-monitoring-operator/pkg/apis/observability/v1beta1"
 )
