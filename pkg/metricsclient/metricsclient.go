@@ -30,8 +30,8 @@ import (
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/metrics-collector/pkg/reader"
+	"github.com/stolostron/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/reader"
 )
 
 const (

@@ -1,8 +1,8 @@
-FROM registry.ci.openshift.org/open-cluster-management/builder:go1.15-linux AS builder
+FROM registry.ci.openshift.org/stolostron/builder:go1.15-linux AS builder
 
 ENV GOFLAGS="-mod=vendor"
-COPY . /go/src/github.com/open-cluster-management/metrics-collector
-RUN cd /go/src/github.com/open-cluster-management/metrics-collector && \
+COPY . /go/src/github.com/stolostron/metrics-collector
+RUN cd /go/src/github.com/stolostron/metrics-collector && \
     go mod vendor && go mod tidy && go mod verify && \
     go build ./cmd/metrics-collector
 
@@ -44,5 +44,5 @@ RUN microdnf update &&\
     mkdir /licenses &&\
     microdnf clean all
 
-COPY --from=builder /go/src/github.com/open-cluster-management/metrics-collector/metrics-collector /usr/bin/
+COPY --from=builder /go/src/github.com/stolostron/metrics-collector/metrics-collector /usr/bin/
 RUN cp /usr/bin/metrics-collector /usr/bin/telemeter-client

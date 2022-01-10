@@ -22,12 +22,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	clientmodel "github.com/prometheus/client_model/go"
 
-	metricshttp "github.com/open-cluster-management/metrics-collector/pkg/http"
-	rlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
-	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
-	"github.com/open-cluster-management/metrics-collector/pkg/simulator"
-	"github.com/open-cluster-management/metrics-collector/pkg/status"
+	metricshttp "github.com/stolostron/metrics-collector/pkg/http"
+	rlogger "github.com/stolostron/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/metricfamily"
+	"github.com/stolostron/metrics-collector/pkg/metricsclient"
+	"github.com/stolostron/metrics-collector/pkg/simulator"
+	"github.com/stolostron/metrics-collector/pkg/status"
 )
 
 const (

@@ -22,10 +22,10 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/forwarder"
-	collectorhttp "github.com/open-cluster-management/metrics-collector/pkg/http"
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
+	"github.com/stolostron/metrics-collector/pkg/forwarder"
+	collectorhttp "github.com/stolostron/metrics-collector/pkg/http"
+	"github.com/stolostron/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/metricfamily"
 )
 
 func main() {
