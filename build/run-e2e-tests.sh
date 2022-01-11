@@ -2,6 +2,7 @@
 # Copyright (c) 2021 Red Hat, Inc.
 
 echo "<repo>/<component>:<tag> : $1"
+git config --global url."https://$GITHUB_TOKEN@github.com/stolostron".insteadOf  "https://github.com/stolostron"
 
 WORKDIR=`pwd`
 cd ${WORKDIR}/..
@@ -14,7 +15,7 @@ if [ $? -ne 0 ]; then
 fi
 
 cd ${WORKDIR}/..
-git clone https://github.com/stolostron/observability-e2e-test.git
+git clone --depth 1 -b release-2.2 https://github.com/stolostron/observability-e2e-test.git
 cd observability-e2e-test
 
 # run test cases
