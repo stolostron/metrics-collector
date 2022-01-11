@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize/tollbooth"
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/authorize/tollbooth"
+	"github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 type tokenEntry struct {

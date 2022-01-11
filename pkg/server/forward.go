@@ -19,8 +19,8 @@ import (
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/prometheus/prompb"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
+	"github.com/stolostron/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/metricfamily"
 )
 
 const (

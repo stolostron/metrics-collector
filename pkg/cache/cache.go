@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 // Cacher is able to get and set key value pairs.

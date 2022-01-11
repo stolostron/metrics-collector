@@ -15,7 +15,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
+	"github.com/stolostron/metrics-collector/pkg/authorize"
 )
 
 type statusCodeErr struct {

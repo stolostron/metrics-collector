@@ -105,7 +105,7 @@ spec:
         - name: HTTP_PROXY
         - name: HTTPS_PROXY
         - name: NO_PROXY
-        image: quay.io/open-cluster-management/metrics-collector:2.1.0-PR6-1b7cdb7b33bd9baed230a367465ec7238204648a 
+        image: quay.io/stolostron/metrics-collector:2.1.0-PR6-1b7cdb7b33bd9baed230a367465ec7238204648a 
         imagePullPolicy: Always
         name: telemeter-client
         ports:

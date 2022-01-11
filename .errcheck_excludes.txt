@@ -1,2 +1,2 @@
 (github.com/go-kit/kit/log.Logger).Log
-(github.com/open-cluster-management/metrics-collector/vendor/github.com/go-kit/kit/log.Logger).Log
+(github.com/stolostron/metrics-collector/vendor/github.com/go-kit/kit/log.Logger).Log

@@ -10,7 +10,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"golang.org/x/time/rate"
 
-	mlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
+	mlogger "github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 // ErrWriteLimitReached is an error that is returned when a cluster has sent too many requests.

@@ -14,7 +14,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	rlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
+	rlogger "github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 func NewAuthorizeClientHandler(authorizer ClientAuthorizer, next http.Handler) http.Handler {
