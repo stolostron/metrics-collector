@@ -16,9 +16,9 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	rlogger "github.com/stolostron/metrics-collector/pkg/logger"
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	rlogger "github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 const (
