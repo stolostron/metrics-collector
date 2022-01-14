@@ -11,14 +11,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	"github.com/open-cluster-management/multicluster-monitoring-operator/pkg/apis"
-	oav1beta1 "github.com/open-cluster-management/multicluster-monitoring-operator/pkg/apis/observability/v1beta1"
+	oav1beta1 "github.com/stolostron/multicluster-observability-operator/api/v1beta1"
 )
 
 func init() {
 	os.Setenv("UNIT_TEST", "true")
 	s := scheme.Scheme
-	_ = apis.AddToScheme(s)
+	_ = oav1beta1.AddToScheme(s)
 }
 
 func TestUpdateStatus(t *testing.T) {

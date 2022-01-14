@@ -17,8 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/stolostron/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/multicluster-monitoring-operator/pkg/apis"
-	oav1beta1 "github.com/open-cluster-management/multicluster-monitoring-operator/pkg/apis/observability/v1beta1"
+	oav1beta1 "github.com/stolostron/multicluster-observability-operator/api/v1beta1"
 )
 
 const (
@@ -45,7 +44,7 @@ func New(logger log.Logger) (*StatusReport, error) {
 			return nil, errors.New("Failed to create the kube config")
 		}
 		s := scheme.Scheme
-		if err := apis.AddToScheme(s); err != nil {
+		if err := oav1beta1.AddToScheme(s); err != nil {
 			return nil, errors.New("Failed to add observabilityaddon into scheme")
 		}
 		kubeClient, err = client.New(config, client.Options{Scheme: s})
