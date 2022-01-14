@@ -31,17 +31,17 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize/jwt"
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize/stub"
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize/tollbooth"
-	"github.com/open-cluster-management/metrics-collector/pkg/cache"
-	"github.com/open-cluster-management/metrics-collector/pkg/cache/memcached"
-	telemeter_http "github.com/open-cluster-management/metrics-collector/pkg/http"
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
-	"github.com/open-cluster-management/metrics-collector/pkg/receive"
-	"github.com/open-cluster-management/metrics-collector/pkg/server"
+	"github.com/stolostron/metrics-collector/pkg/authorize"
+	"github.com/stolostron/metrics-collector/pkg/authorize/jwt"
+	"github.com/stolostron/metrics-collector/pkg/authorize/stub"
+	"github.com/stolostron/metrics-collector/pkg/authorize/tollbooth"
+	"github.com/stolostron/metrics-collector/pkg/cache"
+	"github.com/stolostron/metrics-collector/pkg/cache/memcached"
+	telemeter_http "github.com/stolostron/metrics-collector/pkg/http"
+	"github.com/stolostron/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/metricfamily"
+	"github.com/stolostron/metrics-collector/pkg/receive"
+	"github.com/stolostron/metrics-collector/pkg/server"
 )
 
 const desc = `

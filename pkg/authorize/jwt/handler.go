@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/authorize"
+	"github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 type authorizeClusterHandler struct {
@@ -89,7 +89,7 @@ func (a *authorizeClusterHandler) ServeHTTP(w http.ResponseWriter, req *http.Req
 		// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
 		// (Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
 		// #nosec G404
-		uid := rand.Int63()
+		uid := rand.Int63() // #nosec
 		logger.Log(a.logger, logger.Error, "msg", "unable to authorize request", "uid", uid, "err", err)
 		http.Error(w, fmt.Sprintf("Internal server error, requestid=%d", uid), http.StatusInternalServerError)
 		return

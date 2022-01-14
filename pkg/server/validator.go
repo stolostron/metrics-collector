@@ -15,10 +15,10 @@ import (
 	clientmodel "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
-	mlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
-	"github.com/open-cluster-management/metrics-collector/pkg/reader"
+	"github.com/stolostron/metrics-collector/pkg/authorize"
+	mlogger "github.com/stolostron/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/metricfamily"
+	"github.com/stolostron/metrics-collector/pkg/reader"
 )
 
 type clusterIDCtxType int

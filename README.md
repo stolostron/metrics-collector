@@ -5,14 +5,14 @@ hub cluster. This project is based on the [Telemeter project](https://github.com
 
 ## Setting up development environment locally 
  
- **Prerequisites**: You must have Red Hat Advanced Cluster Management monitoring installed on a hub cluster. For more information, see the [`multicluster-monitoring-operator` repo](https://github.com/open-cluster-management/multicluster-monitoring-operator).
+ **Prerequisites**: You must have Red Hat Advanced Cluster Management monitoring installed on a hub cluster. For more information, see the [`multicluster-monitoring-operator` repo](https://github.com/stolostron/multicluster-monitoring-operator).
 
 Complete the following steps to set up your environment:
  
-1. Clone the `open-cluster-management` repo by running the following command:
+1. Clone the `metrics-collector` repo by running the following command:
    
    ```
-   git clone https://github.com/open-cluster-management/metrics-collector.git
+   git clone https://github.com/stolostron/metrics-collector.git
    ```
    
 2. Log in to your hub cluster. Run the following command:

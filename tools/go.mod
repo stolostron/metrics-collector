@@ -1,4 +1,4 @@
-module github.com/open-cluster-management/metrics-collector/tools
+module github.com/stolostron/metrics-collector/tools
 
 go 1.14
 

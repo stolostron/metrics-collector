@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/fnv"
+	"github.com/stolostron/metrics-collector/pkg/fnv"
 )
 
 func Authorize(token, cluster string) (string, error) {

@@ -12,8 +12,8 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/authorize"
+	"github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 type clusterRegistration struct {

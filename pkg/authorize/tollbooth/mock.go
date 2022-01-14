@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/fnv"
-	mlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/fnv"
+	mlogger "github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 type Key struct {

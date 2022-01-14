@@ -24,10 +24,10 @@ import (
 	"github.com/prometheus/common/expfmt"
 	uuid "github.com/satori/go.uuid"
 
-	"github.com/open-cluster-management/metrics-collector/pkg/authorize"
-	"github.com/open-cluster-management/metrics-collector/pkg/logger"
-	"github.com/open-cluster-management/metrics-collector/pkg/metricfamily"
-	"github.com/open-cluster-management/metrics-collector/pkg/metricsclient"
+	"github.com/stolostron/metrics-collector/pkg/authorize"
+	"github.com/stolostron/metrics-collector/pkg/logger"
+	"github.com/stolostron/metrics-collector/pkg/metricfamily"
+	"github.com/stolostron/metrics-collector/pkg/metricsclient"
 )
 
 const (
@@ -222,7 +222,7 @@ func (b *Benchmark) Run() {
 				// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
 				//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
 				// #nosec G404
-				case <-time.After(time.Duration(rand.Int63n(int64(w.interval)))):
+				case <-time.After(time.Duration(rand.Int63n(int64(w.interval)))): // #nosec
 					w.run(ctx)
 				case <-ctx.Done():
 				}
@@ -310,7 +310,7 @@ func (w *worker) generate() []*clientmodel.MetricFamily {
 			// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
 			//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
 			// #nosec G404
-			ts := now - rand.Int63n(int64(w.interval/time.Millisecond))
+			ts := now - rand.Int63n(int64(w.interval/time.Millisecond)) // #nosec
 			m.TimestampMs = &ts
 			mf.Metric[j] = m
 		}
@@ -331,7 +331,7 @@ func randomize(metric *clientmodel.Metric) *clientmodel.Metric {
 		// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
 		//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
 		// #nosec G404
-		f := math.Round(rand.Float64() * v.GetValue())
+		f := math.Round(rand.Float64() * v.GetValue()) // #nosec
 		v.Value = &f
 		m.Untyped = &v
 	}
@@ -340,7 +340,7 @@ func randomize(metric *clientmodel.Metric) *clientmodel.Metric {
 		// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
 		//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
 		// #nosec G404
-		f := math.Round(rand.Float64() * v.GetValue())
+		f := math.Round(rand.Float64() * v.GetValue()) // #nosec
 		v.Value = &f
 		m.Gauge = &v
 	}
@@ -348,7 +348,8 @@ func randomize(metric *clientmodel.Metric) *clientmodel.Metric {
 		// disable "G404 (CWE-338): Use of weak random number generator (math/rand instead of crypto/rand)
 		//(Confidence: MEDIUM, Severity: HIGH)"	as it is not used in a security context
 		// #nosec G404
-		if rand.Intn(2) == 1 {
+		rv := rand.Intn(2) // #nosec
+		if rv == 1 {
 			v := *m.GetCounter()
 			f := v.GetValue() + 1
 			v.Value = &f

@@ -14,7 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/prompb"
 
-	mlogger "github.com/open-cluster-management/metrics-collector/pkg/logger"
+	mlogger "github.com/stolostron/metrics-collector/pkg/logger"
 )
 
 const forwardTimeout = 5 * time.Second

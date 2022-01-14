@@ -12,15 +12,9 @@ export GITHUB_USER := $(shell echo $(GITHUB_USER) | sed 's/@/%40/g')
 export GITHUB_TOKEN ?=
 export UNIT_TEST=true
 
-USE_VENDORIZED_BUILD_HARNESS ?=
+-include $(shell [ -f ".build-harness-bootstrap" ] || curl -sL -o .build-harness-bootstrap -H "Authorization: token $(GITHUB_TOKEN)" -H "Accept: application/vnd.github.v3.raw" "https://raw.github.com/stolostron/build-harness-extensions/main/templates/Makefile.build-harness-bootstrap"; echo .build-harness-bootstrap)
 
-ifndef USE_VENDORIZED_BUILD_HARNESS
--include $(shell curl -s -H 'Authorization: token ${GITHUB_TOKEN}' -H 'Accept: application/vnd.github.v4.raw' -L https://api.github.com/repos/open-cluster-management/build-harness-extensions/contents/templates/Makefile.build-harness-bootstrap -o .build-harness-bootstrap; echo .build-harness-bootstrap)
-else
--include vbh/.build-harness-vendorized
-endif
-
-GO_PKG=github.com/open-cluster-management/metrics-collector
+GO_PKG=github.com/stolostron/metrics-collector
 #REPO?=quay.io/openshift/telemeter
 TAG?=$(shell git rev-parse --short HEAD)
 
